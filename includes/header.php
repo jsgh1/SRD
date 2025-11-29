@@ -3,9 +3,19 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+
 $nombre_admin = $_SESSION['admin_nombre'] ?? 'Administrador';
 $cargo_admin  = $_SESSION['admin_cargo']  ?? 'Admin';
 ?>
+
+<div id="global-loader" class="global-loader hidden">
+  <div class="global-loader-backdrop"></div>
+  <div class="global-loader-content">
+    <div class="spinner"></div>
+    <p>Guardando, por favor espera...</p>
+  </div>
+</div>
+
 <header class="main-header">
   <div class="logo">Sistema de Registro</div>
   <div class="search-bar">

@@ -389,3 +389,118 @@ body.tema-oscuro .main-footer {
   text-decoration: line-through;
   color: #9ca3af;
 }
+
+.input-error {
+  border: 1px solid #dc2626 !important;
+  background-color: #fef2f2;
+}
+
+.alert-js {
+  margin-bottom: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.global-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.global-loader-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.global-loader-content {
+  position: relative;
+  background: #ffffff;
+  padding: 16px 24px;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  text-align: center;
+}
+
+.global-loader-content p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tema oscuro: cuadro del loader también oscuro */
+body.tema-oscuro .global-loader-content {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.sidebar li a {
+  display: block;
+  padding: 10px 14px;
+  color: #e2e8f0;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar li a:hover {
+  background: #1e293b;
+}
+
+.sidebar li a.active {
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+body.tema-oscuro .sidebar li a.active {
+  background: #1d4ed8;
+}
+
+/* Hover en filas de tabla */
+.tabla-recientes tbody tr:hover {
+  background: #f9fafb;
+}
+
+body.tema-oscuro .tabla-recientes tbody tr:hover {
+  background: #111827;
+}
+
+/* Transiciones suaves en cards */
+.card-metrica,
+.grafico-card,
+.form-card,
+.detalle-card {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.card-metrica:hover,
+.grafico-card:hover,
+.form-card:hover,
+.detalle-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15,23,42,0.15);
+}

@@ -229,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php endif; ?>
 
       <section class="form-card">
-        <form method="post" action="" enctype="multipart/form-data">
+        <form id="form-editar" class="show-loader-on-submit" method="post" action="" enctype="multipart/form-data">
           <h2>Datos de la persona</h2>
 
           <div class="form-row">
@@ -401,5 +401,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </main>
   </div>
   <?php include __DIR__ . '/../includes/footer.php'; ?>
+    <script src="../assets/js/formularios.js"></script>
 </body>
 </html>
