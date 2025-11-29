@@ -6,52 +6,46 @@ require_once __DIR__ . '/../config/db.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
-// Parámetros de filtros
 $search          = trim($_GET['search'] ?? '');
 $filtro_estado   = trim($_GET['estado'] ?? '');
 $filtro_tipo_doc = trim($_GET['tipo_documento'] ?? '');
 
-// Paginación
 $por_pagina = 20;
 $pagina     = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset     = ($pagina - 1) * $por_pagina;
 
-// Eliminar registro (simple, se podría mejorar con token CSRF)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'eliminar') {
     $id_eliminar = (int)($_POST['id'] ?? 0);
 
     if ($id_eliminar > 0) {
-        // Buscar para eliminar también archivos
+
         $stmt = $pdo->prepare("SELECT foto_persona, foto_documento, foto_predio FROM personas WHERE id = ?");
         $stmt->execute([$id_eliminar]);
         $fila = $stmt->fetch();
 
         if ($fila) {
-            // Borrar archivos físicos si existen
+
             foreach (['foto_persona', 'foto_documento', 'foto_predio'] as $campo) {
                 if (!empty($fila[$campo])) {
-                    $ruta = __DIR__ . '/..' . $fila[$campo]; // porque en BD guardamos "/uploads/..."
+                    $ruta = __DIR__ . '/..' . $fila[$campo];
                     if (file_exists($ruta)) {
                         @unlink($ruta);
                     }
                 }
             }
 
-            // Borrar registro
             $del = $pdo->prepare("DELETE FROM personas WHERE id = ?");
             $del->execute([$id_eliminar]);
         }
     }
 
-    // Redirigir para evitar reenvío del formulario
     $qs = $_GET;
-    unset($qs['page']); // vuelve a la primera página
+    unset($qs['page']); 
     $query_string = http_build_query($qs);
     header('Location: lista.php' . ($query_string ? '?' . $query_string : ''));
     exit;
 }
 
-// Construir WHERE dinámico
 $where   = [];
 $params  = [];
 
@@ -75,13 +69,11 @@ if ($filtro_tipo_doc !== '') {
 
 $where_sql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-// Total de registros (para paginación)
 $stmt_total = $pdo->prepare("SELECT COUNT(*) AS total FROM personas $where_sql");
 $stmt_total->execute($params);
 $total_registros = (int)$stmt_total->fetch()['total'];
 $total_paginas   = max(1, ceil($total_registros / $por_pagina));
 
-// Obtener registros de la página actual
 $sql = "
     SELECT id, nombres, apellidos, tipo_documento, numero_documento,
            fecha_registro, estado_registro
@@ -183,7 +175,6 @@ $registros = $stmt_lista->fetchAll();
             </tbody>
           </table>
 
-          <!-- Paginación -->
           <div class="paginacion">
             <?php if ($pagina > 1): ?>
               <a href="?<?php

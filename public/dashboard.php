@@ -6,16 +6,13 @@ require_once __DIR__ . '/../config/db.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
-// MÉTRICAS
-// Total personas
+
 $stmt = $pdo->query("SELECT COUNT(*) AS total FROM personas");
 $total_personas = (int)$stmt->fetch()['total'];
 
-// Personas hoy
 $stmt = $pdo->query("SELECT COUNT(*) AS total FROM personas WHERE DATE(fecha_registro) = CURDATE()");
 $personas_hoy = (int)$stmt->fetch()['total'];
 
-// Personas esta semana
 $stmt = $pdo->query("
     SELECT COUNT(*) AS total 
     FROM personas 
@@ -23,7 +20,6 @@ $stmt = $pdo->query("
 ");
 $personas_semana = (int)$stmt->fetch()['total'];
 
-// Personas este mes
 $stmt = $pdo->query("
     SELECT COUNT(*) AS total 
     FROM personas 
@@ -32,7 +28,6 @@ $stmt = $pdo->query("
 ");
 $personas_mes = (int)$stmt->fetch()['total'];
 
-// DATOS PARA GRÁFICO DE ÚLTIMOS 7 DÍAS
 $stmt = $pdo->query("
     SELECT DATE(fecha_registro) AS fecha, COUNT(*) AS total
     FROM personas
@@ -44,7 +39,6 @@ $stmt = $pdo->query("
 $labels_dias = [];
 $valores_dias = [];
 
-// Rellenar los 7 días aunque no haya datos
 $fechas_map = [];
 while ($row = $stmt->fetch()) {
     $fechas_map[$row['fecha']] = (int)$row['total'];
@@ -56,7 +50,6 @@ for ($i = 6; $i >= 0; $i--) {
     $valores_dias[] = $fechas_map[$fecha] ?? 0;
 }
 
-// DATOS PARA GRÁFICO DE GÉNERO
 $stmt = $pdo->query("
     SELECT genero, COUNT(*) AS total
     FROM personas
@@ -69,7 +62,6 @@ while ($row = $stmt->fetch()) {
     $valores_genero[] = (int)$row['total'];
 }
 
-// DATOS PARA GRÁFICO DE TIPO DE DOCUMENTO
 $stmt = $pdo->query("
     SELECT tipo_documento, COUNT(*) AS total
     FROM personas
@@ -82,7 +74,6 @@ while ($row = $stmt->fetch()) {
     $valores_doc[] = (int)$row['total'];
 }
 
-// ÚLTIMOS 10 REGISTROS
 $stmt = $pdo->query("
     SELECT id, nombres, apellidos, tipo_documento, numero_documento, fecha_registro, estado_registro
     FROM personas
@@ -97,7 +88,6 @@ $ultimos = $stmt->fetchAll();
   <meta charset="UTF-8">
   <title>Panel principal - Sistema de Registro</title>
   <link rel="stylesheet" href="../assets/css/styles.css">
-  <!-- Chart.js desde CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="<?php echo $body_class; ?>">
@@ -109,7 +99,6 @@ $ultimos = $stmt->fetchAll();
       <h1>Panel principal</h1>
       <p>Bienvenido, <?php echo htmlspecialchars($_SESSION['admin_nombre'] ?? 'Administrador'); ?>.</p>
 
-      <!-- Cards métricas -->
       <section class="cards-metricas">
         <div class="card-metrica">
           <h3>Total personas</h3>
@@ -129,7 +118,6 @@ $ultimos = $stmt->fetchAll();
         </div>
       </section>
 
-      <!-- Gráficos -->
       <section class="graficos-grid">
         <div class="grafico-card">
           <h3>Registros últimos 7 días</h3>
@@ -145,7 +133,6 @@ $ultimos = $stmt->fetchAll();
         </div>
       </section>
 
-      <!-- Últimos registros -->
       <section class="tabla-recientes">
         <h3>Últimos registros</h3>
         <?php if (count($ultimos) === 0): ?>
@@ -190,7 +177,6 @@ $ultimos = $stmt->fetchAll();
     const labelsDoc  = <?php echo json_encode($labels_doc); ?>;
     const valoresDoc = <?php echo json_encode($valores_doc); ?>;
 
-    // Gráfico de líneas - Últimos 7 días
     const ctxDias = document.getElementById('chartDias').getContext('2d');
     new Chart(ctxDias, {
       type: 'line',
@@ -211,7 +197,6 @@ $ultimos = $stmt->fetchAll();
       }
     });
 
-    // Gráfico de torta - Género
     const ctxGenero = document.getElementById('chartGenero').getContext('2d');
     new Chart(ctxGenero, {
       type: 'pie',
@@ -225,8 +210,7 @@ $ultimos = $stmt->fetchAll();
         responsive: true
       }
     });
-
-    // Gráfico de torta - Tipo de documento
+    
     const ctxDoc = document.getElementById('chartDocumento').getContext('2d');
     new Chart(ctxDoc, {
       type: 'pie',

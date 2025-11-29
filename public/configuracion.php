@@ -11,7 +11,6 @@ $admin_id = $_SESSION['admin_id'] ?? 0;
 $mensaje_tema = '';
 $mensaje_opciones = '';
 
-// Actualizar tema
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POST['form_tipo'] === 'tema') {
     $nuevo_tema = $_POST['tema'] === 'oscuro' ? 'oscuro' : 'claro';
 
@@ -24,7 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POS
     $mensaje_tema = 'Tema actualizado correctamente.';
 }
 
-// Agregar opción
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POST['form_tipo'] === 'add_opcion') {
     $grupo = trim($_POST['grupo'] ?? '');
     $valor = trim($_POST['valor'] ?? '');
@@ -42,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POS
     }
 }
 
-// Eliminar (desactivar) opción
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POST['form_tipo'] === 'del_opcion') {
     $id_op = (int)($_POST['id'] ?? 0);
     if ($id_op > 0) {
@@ -52,7 +49,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_tipo']) && $_POS
     }
 }
 
-// Cargar opciones por grupo
 function cargarOpcionesGrupo($pdo, $grupo) {
     $stmt = $pdo->prepare("SELECT id, valor, activo FROM opciones_select WHERE grupo = ? ORDER BY valor");
     $stmt->execute([$grupo]);
@@ -79,7 +75,6 @@ $op_cargo    = cargarOpcionesGrupo($pdo, 'cargo');
     <main class="content">
       <h1>Configuración</h1>
 
-      <!-- TEMA -->
       <section class="form-card">
         <h2>Tema</h2>
         <?php if ($mensaje_tema): ?>
@@ -99,7 +94,6 @@ $op_cargo    = cargarOpcionesGrupo($pdo, 'cargo');
         </form>
       </section>
 
-      <!-- OPCIONES -->
       <section class="form-card">
         <h2>Opciones para selects (Afiliado, Zona, Género, Cargo)</h2>
 

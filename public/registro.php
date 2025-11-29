@@ -9,7 +9,6 @@ $body_class = 'main-layout tema-' . $tema;
 $errores = [];
 $exito = '';
 
-// Cargar opciones dinámicas
 function cargarOpciones($pdo, $grupo) {
     $stmt = $pdo->prepare("SELECT valor FROM opciones_select WHERE grupo = ? AND activo = 1 ORDER BY valor");
     $stmt->execute([$grupo]);
@@ -22,7 +21,7 @@ $op_genero   = cargarOpciones($pdo, 'genero');
 $op_cargo    = cargarOpciones($pdo, 'cargo');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Campos básicos
+    
     $tipo_documento   = trim($_POST['tipo_documento'] ?? '');
     $numero_documento = trim($_POST['numero_documento'] ?? '');
     $nombres          = trim($_POST['nombres'] ?? '');
@@ -38,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estado_registro  = trim($_POST['estado_registro'] ?? 'Pendiente');
     $nota_admin       = trim($_POST['nota_admin'] ?? '');
 
-    // Validación según estado
     if ($estado_registro === 'Completado') {
         if ($tipo_documento === '')   $errores[] = 'El tipo de documento es obligatorio.';
         if ($numero_documento === '') $errores[] = 'El número de documento es obligatorio.';
@@ -54,19 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($correo_elec === '')      $errores[] = 'El correo electrónico es obligatorio.';
     }
 
-    // Validación simple de correo si viene
     if ($correo_elec !== '' && !filter_var($correo_elec, FILTER_VALIDATE_EMAIL)) {
         $errores[] = 'El correo electrónico no tiene un formato válido.';
     }
 
-    // Manejo de archivos (pueden ser opcionales si estado es Pendiente)
     $ruta_foto_persona   = null;
     $ruta_foto_documento = null;
     $ruta_foto_predio    = null;
 
     function subirImagen($campo, $carpeta, &$errores) {
         if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
-            return null; // no se subió archivo
+            return null; 
         }
 
         $file = $_FILES[$campo];
@@ -85,7 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return null;
         }
 
-        // tamaño max 5MB
         if ($file['size'] > 5 * 1024 * 1024) {
             $errores[] = "La imagen en $campo supera los 5MB.";
             return null;
@@ -106,14 +101,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         return $destino;
     }
 
-    // Subir imágenes (solo si no hay errores graves previos)
     if (empty($errores)) {
         $ruta_foto_persona   = subirImagen('foto_persona',   __DIR__ . '/../uploads/personas',   $errores);
         $ruta_foto_documento = subirImagen('foto_documento', __DIR__ . '/../uploads/documentos', $errores);
         $ruta_foto_predio    = subirImagen('foto_predio',    __DIR__ . '/../uploads/predios',    $errores);
     }
 
-    // Insertar en BD
     if (empty($errores)) {
         $stmt = $pdo->prepare("
             INSERT INTO personas (

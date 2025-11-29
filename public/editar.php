@@ -15,7 +15,6 @@ if ($id <= 0) {
     exit;
 }
 
-// Cargar opciones dinámicas
 function cargarOpciones($pdo, $grupo) {
     $stmt = $pdo->prepare("SELECT valor FROM opciones_select WHERE grupo = ? AND activo = 1 ORDER BY valor");
     $stmt->execute([$grupo]);
@@ -27,7 +26,6 @@ $op_zona     = cargarOpciones($pdo, 'zona');
 $op_genero   = cargarOpciones($pdo, 'genero');
 $op_cargo    = cargarOpciones($pdo, 'cargo');
 
-// Cargar datos actuales de la persona
 $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = ?");
 $stmt->execute([$id]);
 $persona = $stmt->fetch();
@@ -37,7 +35,6 @@ if (!$persona) {
     exit;
 }
 
-// Inicializar variables con valores actuales
 $tipo_documento   = $persona['tipo_documento'];
 $numero_documento = $persona['numero_documento'];
 $nombres          = $persona['nombres'];
@@ -58,7 +55,7 @@ $ruta_foto_documento_bd = $persona['foto_documento'];
 $ruta_foto_predio_bd    = $persona['foto_predio'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Releer datos desde el POST (por si el usuario cambió cosas)
+
     $tipo_documento   = trim($_POST['tipo_documento'] ?? '');
     $numero_documento = trim($_POST['numero_documento'] ?? '');
     $nombres          = trim($_POST['nombres'] ?? '');
@@ -74,7 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estado_registro  = trim($_POST['estado_registro'] ?? 'Pendiente');
     $nota_admin       = trim($_POST['nota_admin'] ?? '');
 
-    // Validación según estado
     if ($estado_registro === 'Completado') {
         if ($tipo_documento === '')   $errores[] = 'El tipo de documento es obligatorio.';
         if ($numero_documento === '') $errores[] = 'El número de documento es obligatorio.';
@@ -90,15 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($correo_elec === '')      $errores[] = 'El correo electrónico es obligatorio.';
     }
 
-    // Validación simple de correo si viene
     if ($correo_elec !== '' && !filter_var($correo_elec, FILTER_VALIDATE_EMAIL)) {
         $errores[] = 'El correo electrónico no tiene un formato válido.';
     }
 
-    // Función auxiliar para subir imagen (similar a registro.php)
     function subirImagenEditar($campo, $carpeta, &$errores, $ruta_actual) {
         if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
-            // No se subió archivo nuevo, conservar la actual
+
             return $ruta_actual;
         }
 
@@ -135,25 +129,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return $ruta_actual;
         }
 
-        // Borrar imagen anterior si existía
         if ($ruta_actual) {
-            $ruta_fisica = __DIR__ . '/..' . $ruta_actual; // BD guarda "/uploads/..."
+            $ruta_fisica = __DIR__ . '/..' . $ruta_actual; 
             if (file_exists($ruta_fisica)) {
                 @unlink($ruta_fisica);
             }
         }
 
-        return str_replace(__DIR__ . '/..', '', $destino); // guardar como "/uploads/..."
+        return str_replace(__DIR__ . '/..', '', $destino); 
     }
 
-    // Si no hay errores de validación, procesar imágenes
     if (empty($errores)) {
         $ruta_foto_persona_bd   = subirImagenEditar('foto_persona',   __DIR__ . '/../uploads/personas',   $errores, $ruta_foto_persona_bd);
         $ruta_foto_documento_bd = subirImagenEditar('foto_documento', __DIR__ . '/../uploads/documentos', $errores, $ruta_foto_documento_bd);
         $ruta_foto_predio_bd    = subirImagenEditar('foto_predio',    __DIR__ . '/../uploads/predios',    $errores, $ruta_foto_predio_bd);
     }
 
-    // Actualizar en BD si todo OK
     if (empty($errores)) {
         $stmt_upd = $pdo->prepare("
             UPDATE personas
@@ -200,7 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $exito = 'Registro actualizado correctamente.';
 
-        // Volver a cargar datos desde BD (para reflejar cambios)
         $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = ?");
         $stmt->execute([$id]);
         $persona = $stmt->fetch();
@@ -242,7 +232,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="post" action="" enctype="multipart/form-data">
           <h2>Datos de la persona</h2>
 
-          <!-- Foto persona -->
           <div class="form-row">
             <div class="form-group">
               <label>Foto actual de la persona</label><br>
@@ -258,7 +247,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Documento -->
           <div class="form-row">
             <div class="form-group">
               <label for="tipo_documento">Tipo de documento</label>
@@ -277,7 +265,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Nombres, apellidos -->
           <div class="form-row">
             <div class="form-group">
               <label for="nombres">Nombres</label>
@@ -289,7 +276,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Afiliado, zona, género -->
           <div class="form-row">
             <div class="form-group">
               <label for="afiliado">Afiliado</label>
@@ -326,7 +312,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Fecha nac, teléfono, cargo -->
           <div class="form-row">
             <div class="form-group">
               <label for="fecha_nacimiento">Fecha de nacimiento</label>
@@ -349,7 +334,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Predio y correo -->
           <div class="form-row">
             <div class="form-group">
               <label for="nombre_predio">Nombre del predio</label>
@@ -361,7 +345,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
 
-          <!-- Fotos documento y predio -->
           <div class="form-row">
             <div class="form-group">
               <label>Foto actual del documento</label><br>
