@@ -13,28 +13,24 @@ function enviarCodigoLogin($correo, $codigo) {
     $mail = new PHPMailer(true);
 
     try {
-        // Configuración del servidor SMTP
+
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
 
-        // Si usas TLS (puerto 587)
+
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
 
-        // Si tu proveedor usa SSL (puerto 465), sería:
-        // $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        // $mail->Port       = 465;
 
-        // Remitente
         $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
 
-        // Destinatario
+
         $mail->addAddress($correo);
 
-        // Contenido
+
         $mail->isHTML(true);
         $mail->Subject = 'Código de acceso al sistema';
 
@@ -50,8 +46,7 @@ function enviarCodigoLogin($correo, $codigo) {
         $mail->send();
         return true;
     } catch (Exception $e) {
-        // Si quieres debug, puedes hacer un log:
-        // error_log('Error al enviar correo: ' . $mail->ErrorInfo);
+
         return false;
     }
 }
