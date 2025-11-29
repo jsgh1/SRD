@@ -29,17 +29,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $registro = $stmt->fetch();
 
         if ($registro) {
-            
+            // Marcar código como usado
             $update = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE id = ?");
             $update->execute([$registro['id']]);
 
-            
-            $_SESSION['admin_id']    = $admin_id;
+            // Cargar tema del admin desde la BD
+            $stmtAdmin = $pdo->prepare("SELECT tema FROM admins WHERE id = ?");
+            $stmtAdmin->execute([$admin_id]);
+            $adminData = $stmtAdmin->fetch();
+
+            // Crear sesión final del admin
+            $_SESSION['admin_id']     = $admin_id;
             $_SESSION['admin_nombre'] = $_SESSION['login_admin_nombre'] ?? 'Administrador';
             $_SESSION['admin_cargo']  = $_SESSION['login_admin_cargo'] ?? 'Admin';
+            $_SESSION['tema']         = $adminData['tema'] ?? 'claro';
 
-            
-            unset($_SESSION['login_admin_id'], $_SESSION['login_admin_nombre'], $_SESSION['login_admin_cargo']);
+            // Borrar variables temporales usadas en el login previo
+            unset(
+                $_SESSION['login_admin_id'],
+                $_SESSION['login_admin_nombre'],
+                $_SESSION['login_admin_cargo']
+            );
 
             header('Location: dashboard.php');
             exit;

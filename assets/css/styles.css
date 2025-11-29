@@ -157,3 +157,235 @@ body {
   font-size: 13px;
   background: #e5e7eb;
 }
+
+.cards-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.card-metrica {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.card-metrica h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.card-metrica .numero {
+  margin: 0;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.graficos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 16px 0 24px;
+}
+
+.grafico-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.grafico-card h3 {
+  margin-top: 0;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.tabla-recientes table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.tabla-recientes th,
+.tabla-recientes td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.tabla-recientes th {
+  background: #f8fafc;
+  text-align: left;
+  font-weight: 600;
+}
+.tabla-recientes tr:last-child td {
+  border-bottom: none;
+}
+
+.tabla-recientes .estado {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tabla-recientes .estado.pendiente {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.tabla-recientes .estado.completado {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.form-card {
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.detalle-card {
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.detalle-card h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+} 
+
+.detalle-card p {
+  margin: 8px 0;
+}
+
+.detalle-card .detalle-label {
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.detalle-card .detalle-value {
+  color: #1f2937;
+}
+
+.detalle-card .detalle-value a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.detalle-card .detalle-value a:hover {
+  text-decoration: underline;
+}
+
+.btn-secondary {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #cbd5f5;
+  background: #e5e7eb;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+.btn-secondary:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+  color: #9ca3af;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.paginacion {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.paginacion a {
+  text-decoration: none;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #cbd5f5;
+}
+.paginacion a:hover {
+  background: #e0e7ff;
+}
+
+/* Tema oscuro */
+body.tema-oscuro {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+body.tema-oscuro .content {
+  background: #020617;
+}
+
+body.tema-oscuro .form-card,
+body.tema-oscuro .tabla-recientes table,
+body.tema-oscuro .detalle-card,
+body.tema-oscuro .card-metrica,
+body.tema-oscuro .grafico-card {
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+body.tema-oscuro .tabla-recientes th {
+  background: #020617;
+}
+
+body.tema-oscuro .main-footer {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+/* Configuración de opciones */
+.opciones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.fila-opcion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.opcion-inactiva {
+  text-decoration: line-through;
+  color: #9ca3af;
+}
