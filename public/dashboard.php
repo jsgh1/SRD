@@ -96,8 +96,31 @@ $ultimos = $stmt->fetchAll();
     <?php include __DIR__ . '/../includes/sidebar.php'; ?>
 
     <main class="content">
-      <h1>Panel principal</h1>
-      <p>Bienvenido, <?php echo htmlspecialchars($_SESSION['admin_nombre'] ?? 'Administrador'); ?>.</p>
+  <?php
+    $nombre_admin = $_SESSION['admin_nombre'] ?? 'Administrador';
+    $hoy = date('d/m/Y');
+  ?>
+
+  <section class="dashboard-hero">
+    <div class="dashboard-hero-main">
+      <h1>Hola, <?php echo htmlspecialchars($nombre_admin); ?> 👋</h1>
+      <p class="dashboard-hero-subtitle">
+        Bienvenido al panel principal. Revisa rápidamente el estado de los registros,
+        accede al formulario de registro o genera reportes en PDF.
+      </p>
+      <div class="dashboard-hero-actions">
+        <a href="registro.php" class="btn-primary">➕ Nuevo registro</a>
+        <a href="lista.php" class="btn-outline">📋 Ver lista completa</a>
+        <a href="exportar.php" class="btn-ghost">📄 Exportar a PDF</a>
+      </div>
+    </div>
+    <div class="dashboard-hero-side">
+      <p class="dashboard-hero-date-label">Fecha de hoy</p>
+      <p class="dashboard-hero-date"><?php echo $hoy; ?></p>
+      <p class="dashboard-hero-small">Registros totales: <strong><?php echo $total_personas; ?></strong></p>
+      <p class="dashboard-hero-small">Registrados hoy: <strong><?php echo $personas_hoy; ?></strong></p>
+    </div>
+  </section>
 
       <section class="cards-metricas">
         <div class="card-metrica">

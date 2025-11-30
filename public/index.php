@@ -51,24 +51,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="stylesheet" href="../assets/css/styles.css">
 </head>
 <body class="login-page">
-  <div class="login-container">
-    <h1>Iniciar sesión</h1>
-
-    <?php if ($mensaje_error): ?>
-      <div class="alert alert-error"><?php echo htmlspecialchars($mensaje_error); ?></div>
-    <?php endif; ?>
-
-    <form method="post" action="">
-      <div class="form-group">
-        <label for="email">Correo electrónico</label>
-        <input type="email" id="email" name="email" required placeholder="admin@ejemplo.com">
+  <div class="login-wrapper">
+    <!-- Panel izquierdo (branding / descripción) -->
+    <div class="login-hero">
+      <div class="login-hero-inner">
+        <h1>Sistema de Registro</h1>
+        <p>Administra de forma ordenada la información de las personas, sus documentos y predios en un solo lugar.</p>
+        <ul>
+          <li>✔ Panel con métricas y gráficos</li>
+          <li>✔ Búsqueda rápida por documento</li>
+          <li>✔ Exportación de registros a PDF</li>
+        </ul>
       </div>
-      <div class="form-group">
-        <label for="password">Contraseña</label>
-        <input type="password" id="password" name="password" required placeholder="Contraseña">
+      <div class="login-hero-illustration">
+        <div class="bubble big"></div>
+        <div class="bubble medium"></div>
+        <div class="bubble small"></div>
       </div>
-      <button type="submit" class="btn-primary">Ingresar</button>
-    </form>
+    </div>
+
+    <!-- Panel derecho (formulario) -->
+    <div class="login-card">
+      <div class="login-card-header">
+        <h2>Iniciar sesión</h2>
+        <p>Ingresa con tu correo y contraseña de administrador.</p>
+      </div>
+
+      <?php if ($mensaje_error): ?>
+        <div class="alert alert-error"><?php echo htmlspecialchars($mensaje_error); ?></div>
+      <?php endif; ?>
+
+      <form method="post" action="" class="login-form">
+        <div class="form-group">
+          <label for="email">Correo electrónico</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            placeholder="admin@ejemplo.com"
+          >
+        </div>
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            placeholder="Tu contraseña"
+          >
+        </div>
+        <button type="submit" class="btn-primary btn-full">Ingresar</button>
+      </form>
+
+      <div class="login-footer-text">
+        <small>&copy; <?php echo date('Y'); ?> · Sistema de Registro</small>
+      </div>
+    </div>
   </div>
 </body>
 </html>
+
