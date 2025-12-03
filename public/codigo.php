@@ -33,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $update = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE id = ?");
             $update->execute([$registro['id']]);
 
-            // Cargar datos del admin (incluye tema)
-            $stmtAdmin = $pdo->prepare("SELECT nombre, cargo, tema FROM admins WHERE id = ?");
+            // Cargar datos del admin (incluye tema, email, foto)
+            $stmtAdmin = $pdo->prepare("SELECT nombre, cargo, tema, email, foto_perfil FROM admins WHERE id = ?");
             $stmtAdmin->execute([$admin_id]);
             $adminData = $stmtAdmin->fetch();
 
@@ -43,6 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_nombre'] = $adminData['nombre'] ?? ($_SESSION['login_admin_nombre'] ?? 'Administrador');
             $_SESSION['admin_cargo']  = $adminData['cargo']  ?? ($_SESSION['login_admin_cargo']  ?? 'Admin');
             $_SESSION['tema']         = $adminData['tema']   ?? 'claro';
+            $_SESSION['admin_email']  = $adminData['email']  ?? '';
+            $_SESSION['foto_perfil']  = $adminData['foto_perfil'] ?? null;
 
             // Borrar variables temporales
             unset($_SESSION['login_admin_id'], $_SESSION['login_admin_nombre'], $_SESSION['login_admin_cargo']);
@@ -64,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="login-page">
   <div class="login-wrapper">
-    <!-- Panel izquierdo reutilizado (branding / seguridad) -->
+    <!-- Panel izquierdo -->
     <div class="login-hero">
       <div class="login-hero-inner">
         <h1>Verificación en dos pasos</h1>
@@ -79,9 +81,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </ul>
       </div>
       <div class="login-hero-illustration">
-        <div class="bubble big"></div>
-        <div class="bubble medium"></div>
-        <div class="bubble small"></div>
+        <!-- Tarjeta 3D interactiva -->
+        <div class="login-hero-3d-wrapper">
+          <div class="login-hero-3d-card">
+            <div class="hero-3d-header">
+              <span class="hero-3d-icon hero-3d-icon-main">
+                <svg viewBox="0 0 24 24" class="icon-svg">
+                  <path d="M4 9a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" fill="none"></path>
+                  <path d="M9 11h6" fill="none"></path>
+                  <path d="M9 15h3" fill="none"></path>
+                </svg>
+              </span>
+              <div class="hero-3d-title">
+                <p class="hero-3d-label">Código enviado</p>
+                <p class="hero-3d-value">••••••</p>
+              </div>
+            </div>
+
+            <div class="hero-3d-body">
+              <div class="hero-3d-pill">
+                <span class="hero-3d-pill-icon">
+                  <svg viewBox="0 0 24 24" class="icon-svg">
+                    <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                    <polyline points="4 6 12 12 20 6" fill="none"></polyline>
+                  </svg>
+                </span>
+                <span>Enviado al correo registrado</span>
+              </div>
+              <div class="hero-3d-pill">
+                <span class="hero-3d-pill-icon">
+                  <svg viewBox="0 0 24 24" class="icon-svg">
+                    <circle cx="12" cy="12" r="6" fill="none"></circle>
+                    <path d="M12 8v4l2 2" fill="none"></path>
+                  </svg>
+                </span>
+                <span>Expira en pocos minutos</span>
+              </div>
+            </div>
+
+            <div class="hero-3d-footer">
+              <span class="hero-3d-tag">
+                <svg viewBox="0 0 24 24" class="icon-svg">
+                  <path d="M12 2a7 7 0 0 0-7 7v3l-1 3h16l-1-3V9a7 7 0 0 0-7-7z" fill="none"></path>
+                  <path d="M9 20a3 3 0 0 0 6 0" fill="none"></path>
+                </svg>
+                <span>Acceso protegido</span>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -94,25 +142,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </p>
       </div>
 
-      <?php if ($mensaje_error): ?>
-        <div class="alert alert-error"><?php echo htmlspecialchars($mensaje_error); ?></div>
-      <?php endif; ?>
-
       <form method="post" action="" class="login-form">
-        <div class="form-group">
+        <div class="form-group form-group-icon">
           <label for="codigo">Código de verificación</label>
-          <input
-            type="text"
-            id="codigo"
-            name="codigo"
-            required
-            maxlength="6"
-            pattern="\d{6}"
-            inputmode="numeric"
-            placeholder="123456"
-          >
+          <div class="input-with-icon">
+            <span class="input-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-svg">
+                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                <path d="M8 10h2M14 10h2M8 14h2M14 14h2" stroke-width="1.6"></path>
+              </svg>
+            </span>
+            <input
+              type="text"
+              id="codigo"
+              name="codigo"
+              required
+              maxlength="6"
+              pattern="\d{6}"
+              inputmode="numeric"
+              placeholder="123456"
+            >
+          </div>
         </div>
-        <button type="submit" class="btn-primary btn-full">Confirmar código</button>
+
+        <?php if ($mensaje_error): ?>
+          <div class="alert alert-error" style="margin-top:6px;">
+            <?php echo htmlspecialchars($mensaje_error); ?>
+          </div>
+        <?php endif; ?>
+
+        <button type="submit" class="btn-primary btn-full" style="margin-top:8px;">Confirmar código</button>
       </form>
 
       <div class="login-footer-text">
@@ -123,5 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
   </div>
+
+  <script src="../assets/js/login.js"></script>
 </body>
 </html>

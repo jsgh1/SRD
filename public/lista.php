@@ -152,23 +152,63 @@ $registros = $stmt_lista->fetchAll();
             <tbody>
               <?php foreach ($registros as $fila): ?>
                 <tr>
-                  <td><?php echo htmlspecialchars($fila['nombres'] . ' ' . $fila['apellidos']); ?></td>
-                  <td><?php echo htmlspecialchars($fila['tipo_documento']); ?></td>
-                  <td><?php echo htmlspecialchars($fila['numero_documento']); ?></td>
-                  <td><?php echo htmlspecialchars($fila['fecha_registro']); ?></td>
-                  <td><?php echo htmlspecialchars($fila['estado_registro']); ?></td>
-                  <td>
-                    <a href="ver.php?id=<?php echo $fila['id']; ?>">Ver</a>
-                    |
-                    <a href="editar.php?id=<?php echo $fila['id']; ?>">Editar</a>
-                    |
-                    <form method="post" action="" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
+                  <td class="tabla-acciones">
+                    <a
+                      href="ver.php?id=<?php echo $fila['id']; ?>"
+                      class="icon-button"
+                      title="Ver detalle"
+                    >
+                      <svg viewBox="0 0 24 24" class="icon-svg">
+                        <path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z" fill="none"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </a>
+
+                    <a
+                      href="editar.php?id=<?php echo $fila['id']; ?>"
+                      class="icon-button"
+                      title="Editar registro"
+                    >
+                      <svg viewBox="0 0 24 24" class="icon-svg">
+                        <path d="M4 20h4l10.5-10.5a1.5 1.5 0 0 0-2.1-2.1L6 18v4z" fill="none"></path>
+                        <path d="M14 6l4 4" fill="none"></path>
+                      </svg>
+                    </a>
+
+                    <form
+                      method="post"
+                      action=""
+                      class="inline-form"
+                      onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');"
+                    >
                       <input type="hidden" name="accion" value="eliminar">
                       <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
-                      <button type="submit" class="link-button">Eliminar</button>
+                      <button
+                        type="submit"
+                        class="icon-button icon-button-danger"
+                        title="Eliminar registro"
+                      >
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                          <polyline points="4 7 20 7" fill="none"></polyline>
+                          <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" fill="none"></path>
+                          <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" fill="none"></path>
+                          <line x1="10" y1="11" x2="10" y2="17"></line>
+                          <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                      </button>
                     </form>
-                    |
-                    <a href="exportar_pdf.php?id=<?php echo $fila['id']; ?>">PDF</a>
+
+                    <a
+                      href="exportar_pdf.php?id=<?php echo $fila['id']; ?>"
+                      class="icon-button"
+                      title="Exportar a PDF"
+                    >
+                      <svg viewBox="0 0 24 24" class="icon-svg">
+                        <rect x="6" y="3" width="12" height="18" rx="2"></rect>
+                        <polyline points="9 10 12 13 15 10" fill="none"></polyline>
+                        <line x1="12" y1="13" x2="12" y2="7"></line>
+                      </svg>
+                    </a>
                   </td>
                 </tr>
               <?php endforeach; ?>

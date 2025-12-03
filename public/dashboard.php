@@ -95,7 +95,7 @@ $ultimos = $stmt->fetchAll();
   <div class="layout-container">
     <?php include __DIR__ . '/../includes/sidebar.php'; ?>
 
-    <main class="content">
+<main class="content">
   <?php
     $nombre_admin = $_SESSION['admin_nombre'] ?? 'Administrador';
     $hoy = date('d/m/Y');
@@ -103,15 +103,52 @@ $ultimos = $stmt->fetchAll();
 
   <section class="dashboard-hero">
     <div class="dashboard-hero-main">
-      <h1>Hola, <?php echo htmlspecialchars($nombre_admin); ?> 👋</h1>
+      <h1>
+        Hola, <?php echo htmlspecialchars($nombre_admin); ?>
+        <span class="hero-hand" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="icon-svg">
+            <path d="M4 11l1-5a2 2 0 1 1 4 .7V7" fill="none"></path>
+            <path d="M9 4.5a2 2 0 1 1 4 .7V7" fill="none"></path>
+            <path d="M13 4.5a2 2 0 1 1 4 .7V9" fill="none"></path>
+            <path d="M17 7.5a2 2 0 1 1 3 1.6l-1.1 5.4A6 6 0 0 1 13 20H9a5 5 0 0 1-5-5v-1.5" fill="none"></path>
+          </svg>
+        </span>
+      </h1>
       <p class="dashboard-hero-subtitle">
         Bienvenido al panel principal. Revisa rápidamente el estado de los registros,
         accede al formulario de registro o genera reportes en PDF.
       </p>
       <div class="dashboard-hero-actions">
-        <a href="registro.php" class="btn-primary">➕ Nuevo registro</a>
-        <a href="lista.php" class="btn-outline">📋 Ver lista completa</a>
-        <a href="exportar.php" class="btn-ghost">📄 Exportar a PDF</a>
+        <a href="registro.php" class="btn-primary btn-icon">
+          <span class="btn-icon-svg">
+            <svg viewBox="0 0 24 24" class="icon-svg">
+              <rect x="4" y="4" width="16" height="16" rx="3"></rect>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+          </span>
+          <span>Nuevo registro</span>
+        </a>
+        <a href="lista.php" class="btn-outline btn-icon">
+          <span class="btn-icon-svg">
+            <svg viewBox="0 0 24 24" class="icon-svg">
+              <rect x="4" y="6" width="16" height="2" rx="1"></rect>
+              <rect x="4" y="11" width="16" height="2" rx="1"></rect>
+              <rect x="4" y="16" width="16" height="2" rx="1"></rect>
+            </svg>
+          </span>
+          <span>Ver lista completa</span>
+        </a>
+        <a href="exportar.php" class="btn-ghost btn-icon">
+          <span class="btn-icon-svg">
+            <svg viewBox="0 0 24 24" class="icon-svg">
+              <rect x="6" y="3" width="12" height="18" rx="2"></rect>
+              <polyline points="9 10 12 13 15 10" fill="none"></polyline>
+              <line x1="12" y1="13" x2="12" y2="7"></line>
+            </svg>
+          </span>
+          <span>Exportar a PDF</span>
+        </a>
       </div>
     </div>
     <div class="dashboard-hero-side">
