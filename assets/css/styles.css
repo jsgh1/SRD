@@ -139,6 +139,52 @@ body.tema-oscuro .tabla-recientes {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
 }
 
+.tabla-recientes table th,
+.tabla-recientes table td {
+  border-bottom: 1px solid #d1d5db;
+}
+
+body.tema-oscuro .tabla-recientes table th,
+body.tema-oscuro .tabla-recientes table td {
+  border-color: #1f2937;
+}
+
+/* Lista - columna de acciones bien alineada */
+.tabla-recientes table td.tabla-acciones {
+  white-space: nowrap;
+}
+
+.tabla-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+/* Formularios en línea (por ejemplo, eliminar dentro de la tabla) */
+.inline-form {
+  display: inline;
+}
+
+/* Paginación de lista */
+.paginacion {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.paginacion a {
+  text-decoration: none;
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.paginacion a:hover {
+  text-decoration: underline;
+}
+
 /* ---- Alertas ---- */
 
 .alert {
@@ -298,12 +344,12 @@ body.tema-oscuro th {
 }
 
 /* Iconos SVG genéricos */
-
 .icon-svg {
   stroke: currentColor;
   fill: currentColor;
+  width: 16px;
+  height: 16px;
 }
-
 /* Botones de icono (ver, editar, eliminar, PDF, etc.) */
 
 .tabla-acciones {
@@ -444,31 +490,13 @@ body.main-layout.tema-oscuro {
   color: #e5e7eb;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.logo-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.logo-text {
-  font-weight: 600;
-  font-size: 15px;
-  white-space: nowrap;
-}
-
 /* Botón hamburguesa (móvil) */
 .header-toggle {
   border: none;
   background: transparent;
   padding: 4px;
   border-radius: 999px;
-  display: inline-flex;
+  display: none; /* SOLO móvil, ver @media */
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -478,18 +506,65 @@ body.main-layout.tema-oscuro {
   width: 20px;
   height: 20px;
   stroke: #e5e7eb;
-  fill: #e5e7eb;
+  fill: none;
 }
 
-/* Buscador en header */
-.header-search {
-  flex: 1;
+/* Logo + nombre sistema */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #0b1120;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.logo-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.logo-icon .icon-svg {
+  width: 16px;
+  height: 16px;
+  stroke: #60a5fa;
+  fill: none;
+}
+
+.logo-text {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* Buscador centrado */
+.header-search {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0 auto;
 }
 
 .search-input-wrapper {
   position: relative;
-  max-width: 400px;
+  max-width: 380px;
+}
+
+/* en móvil lo dejaremos a lo ancho */
+@media (max-width: 900px) {
+  .header-search {
+    flex: 1;
+    margin: 0 8px;
+  }
 }
 
 .search-input-wrapper input {
@@ -664,6 +739,35 @@ body.main-layout.tema-oscuro {
   fill: none;
 }
 
+/* Por defecto (tema claro) mostramos sol */
+body.tema-claro .icon-theme-sun {
+  display: inline-block;
+}
+
+body.tema-claro .icon-theme-moon {
+  display: none;
+}
+
+/* En tema oscuro mostramos luna */
+body.tema-oscuro .icon-theme-sun {
+  display: none;
+}
+
+body.tema-oscuro .icon-theme-moon {
+  display: inline-block;
+}
+
+.main-footer {
+  padding: 8px 0 10px;
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+body.tema-oscuro .main-footer {
+  color: #6b7280;
+}
+
 .user-menu-footer {
   padding: 4px 2px 2px;
   border-top: 1px solid rgba(148, 163, 184, 0.4);
@@ -676,6 +780,17 @@ body.main-layout.tema-oscuro {
 
 .user-menu-logout:hover {
   background: rgba(248, 113, 113, 0.16);
+}
+
+.user-menu-email {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+  display: block;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- Layout principal con sidebar ---- */
@@ -718,6 +833,10 @@ body.main-layout.tema-oscuro {
   margin: 2px 8px;
 }
 
+.sidebar-link-label {
+  line-height: 1.2;
+}
+
 .sidebar-link:hover {
   background: #111827;
 }
@@ -753,12 +872,12 @@ body.tema-oscuro .content {
     padding-inline: 12px;
   }
 
-  .logo-text {
-    display: none;
+  .header-toggle {
+    display: inline-flex; /* aquí sí se muestra */
   }
 
-  .header-search {
-    flex: 1;
+  .logo-text {
+    display: none; /* opcional, para compactar */
   }
 
   .layout-container {
@@ -1509,6 +1628,15 @@ body.tema-oscuro .exportar-intro p {
   max-width: 220px;
   padding: 4px 6px;
   font-size: 13px;
+}
+
+.btn-export-pdf {
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  background: linear-gradient(to bottom, rgba(15,23,42,0.02), rgba(15,23,42,0.06));
+}
+
+.btn-export-pdf:hover {
+  background: linear-gradient(to bottom, rgba(15,23,42,0.06), rgba(15,23,42,0.12));
 }
 
 /* =========================================================

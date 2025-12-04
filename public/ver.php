@@ -25,6 +25,34 @@ if (!$persona) {
 function v($valor) {
     return $valor !== null && $valor !== '' ? htmlspecialchars($valor) : '—';
 }
+
+// Helper para que las rutas de imagen apunten bien desde /public
+function ruta_publica_upload(?string $ruta): ?string {
+    if (!$ruta) return null;
+
+    // Si ya es URL absoluta, la dejamos
+    if (preg_match('~^https?://~i', $ruta) || strpos($ruta, '//') === 0) {
+        return $ruta;
+    }
+
+    // Si ya comienza con ../ (por ejemplo ../uploads/...)
+    if (strpos($ruta, '../') === 0) {
+        return $ruta;
+    }
+
+    // Si viene como /uploads/..., anteponer ..
+    if (strpos($ruta, '/uploads/') === 0) {
+        return '..' . $ruta;
+    }
+
+    // Si viene como uploads/..., anteponer ../
+    if (strpos($ruta, 'uploads/') === 0) {
+        return '../' . $ruta;
+    }
+
+    // Cualquier otra cosa se devuelve tal cual
+    return $ruta;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -33,7 +61,7 @@ function v($valor) {
   <title>Detalle de persona - Sistema de Registro</title>
   <link rel="stylesheet" href="../assets/css/styles.css">
 </head>
-<body class="<?php echo $body_class; ?>">
+<body class="<?php echo htmlspecialchars($body_class); ?>">
   <?php include __DIR__ . '/../includes/header.php'; ?>
   <div class="layout-container">
     <?php include __DIR__ . '/../includes/sidebar.php'; ?>
@@ -44,7 +72,10 @@ function v($valor) {
         <div class="detalle-header">
           <div class="detalle-avatar">
             <?php if (!empty($persona['foto_persona'])): ?>
-              <img src="<?php echo htmlspecialchars($persona['foto_persona']); ?>" alt="Foto persona">
+              <img
+                src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_persona'])); ?>"
+                alt="Foto persona"
+              >
             <?php else: ?>
               <svg viewBox="0 0 24 24" class="icon-svg">
                 <circle cx="12" cy="9" r="4"></circle>
@@ -61,7 +92,7 @@ function v($valor) {
               <?php endif; ?>
             </p>
             <div class="detalle-header-meta">
-              <span class="chip-estado chip-<?php echo strtolower($persona['estado_registro'] ?? 'pendiente'); ?>">
+              <span class="chip-estado chip-<?php echo ($persona['estado_registro'] ?? '') === 'Completado' ? 'completado' : 'pendiente'; ?>">
                 <svg viewBox="0 0 24 24" class="icon-svg">
                   <?php if (($persona['estado_registro'] ?? '') === 'Completado'): ?>
                     <polyline points="4 13 9 18 20 6" fill="none" stroke-width="2"></polyline>
@@ -109,21 +140,30 @@ function v($valor) {
           <?php if (!empty($persona['foto_persona'])): ?>
             <div class="detalle-foto-item">
               <h3>Foto persona</h3>
-              <img src="<?php echo htmlspecialchars($persona['foto_persona']); ?>" alt="Foto persona">
+              <img
+                src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_persona'])); ?>"
+                alt="Foto persona"
+              >
             </div>
           <?php endif; ?>
 
           <?php if (!empty($persona['foto_documento'])): ?>
             <div class="detalle-foto-item">
               <h3>Foto documento</h3>
-              <img src="<?php echo htmlspecialchars($persona['foto_documento']); ?>" alt="Foto documento">
+              <img
+                src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_documento'])); ?>"
+                alt="Foto documento"
+              >
             </div>
           <?php endif; ?>
 
           <?php if (!empty($persona['foto_predio'])): ?>
             <div class="detalle-foto-item">
               <h3>Foto predio</h3>
-              <img src="<?php echo htmlspecialchars($persona['foto_predio']); ?>" alt="Foto predio">
+              <img
+                src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_predio'])); ?>"
+                alt="Foto predio"
+              >
             </div>
           <?php endif; ?>
 
@@ -154,7 +194,10 @@ function v($valor) {
             <span>Editar</span>
           </a>
 
-          <a href="exportar_pdf.php?id=<?php echo $persona['id']; ?>" class="btn-ghost btn-icon">
+          <a
+            href="exportar_pdf.php?id=<?php echo $persona['id']; ?>"
+            class="btn-outline btn-icon btn-export-pdf"
+          >
             <span class="btn-icon-svg">
               <svg viewBox="0 0 24 24" class="icon-svg">
                 <rect x="6" y="3" width="12" height="18" rx="2"></rect>

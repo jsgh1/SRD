@@ -139,16 +139,16 @@ $ultimos = $stmt->fetchAll();
           </span>
           <span>Ver lista completa</span>
         </a>
-        <a href="exportar.php" class="btn-ghost btn-icon">
-          <span class="btn-icon-svg">
-            <svg viewBox="0 0 24 24" class="icon-svg">
-              <rect x="6" y="3" width="12" height="18" rx="2"></rect>
-              <polyline points="9 10 12 13 15 10" fill="none"></polyline>
-              <line x1="12" y1="13" x2="12" y2="7"></line>
-            </svg>
-          </span>
-          <span>Exportar a PDF</span>
-        </a>
+        <a href="exportar.php" class="btn-outline btn-export-pdf">
+        <span class="btn-icon-svg">
+          <svg viewBox="0 0 24 24" class="icon-svg">
+            <path d="M12 3v12" fill="none"></path>
+            <polyline points="8 11 12 15 16 11" fill="none"></polyline>
+            <rect x="4" y="15" width="16" height="4" rx="2"></rect>
+          </svg>
+        </span>
+        <span>Exportar PDF</span>
+      </a>
       </div>
     </div>
     <div class="dashboard-hero-side">

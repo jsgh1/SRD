@@ -25,6 +25,18 @@ if (!$admin) {
     exit;
 }
 
+// Cargar config sistema
+try {
+    $stmtCfg = $pdo->query("SELECT * FROM config_sistema ORDER BY id ASC LIMIT 1");
+    $configSistema = $stmtCfg->fetch();
+} catch (Exception $e) {
+    $configSistema = null;
+}
+
+$config_id       = $configSistema['id'] ?? null;
+$nombre_sistema  = $configSistema['nombre_sistema'] ?? 'Sistema de Registro';
+$logo_sistema    = $configSistema['logo_sistema'] ?? null;
+
 // Helper subir foto de perfil
 function subirFotoPerfil($campo, $ruta_actual, &$errores) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
@@ -42,7 +54,7 @@ function subirFotoPerfil($campo, $ruta_actual, &$errores) {
     $ext      = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
     $permitidas = ['jpg','jpeg','png'];
 
-    if (!in_array($ext, $permitidas)) {
+    if (!in_array($ext, $permitidas, true)) {
         $errores[] = 'Formato de imagen no permitido en foto de perfil (solo JPG o PNG).';
         return $ruta_actual;
     }
@@ -52,13 +64,13 @@ function subirFotoPerfil($campo, $ruta_actual, &$errores) {
         return $ruta_actual;
     }
 
-    $carpeta = __DIR__ . '/../uploads/admins';
-    if (!is_dir($carpeta)) {
-        @mkdir($carpeta, 0777, true);
+    $carpetaFisica = __DIR__ . '/../uploads/admins';
+    if (!is_dir($carpetaFisica)) {
+        @mkdir($carpetaFisica, 0777, true);
     }
 
     $nuevo_nombre = uniqid('admin_') . '.' . $ext;
-    $destino = $carpeta . '/' . $nuevo_nombre;
+    $destino = $carpetaFisica . '/' . $nuevo_nombre;
 
     if (!move_uploaded_file($tmp_name, $destino)) {
         $errores[] = 'No se pudo guardar la foto de perfil.';
@@ -67,14 +79,66 @@ function subirFotoPerfil($campo, $ruta_actual, &$errores) {
 
     // Borrar foto anterior si existía
     if ($ruta_actual) {
-        $ruta_fisica = realpath(__DIR__ . '/..' . $ruta_actual);
+        $ruta_fisica = realpath(__DIR__ . '/' . $ruta_actual);
         if ($ruta_fisica && file_exists($ruta_fisica)) {
             @unlink($ruta_fisica);
         }
     }
 
-    // Guardar como ruta relativa "/uploads/admins/..."
-    return str_replace(realpath(__DIR__ . '/..'), '', realpath($destino));
+    // Guardar ruta relativa desde public: ../uploads/admins/...
+    return '../uploads/admins/' . $nuevo_nombre;
+}
+
+// Helper subir logo del sistema
+function subirLogoSistema($campo, $ruta_actual, &$errores) {
+    if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
+        return $ruta_actual;
+    }
+
+    $file = $_FILES[$campo];
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        $errores[] = 'Error al subir el logo del sistema.';
+        return $ruta_actual;
+    }
+
+    $tmp_name = $file['tmp_name'];
+    $nombre   = basename($file['name']);
+    $ext      = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+    $permitidas = ['jpg','jpeg','png','svg'];
+
+    if (!in_array($ext, $permitidas, true)) {
+        $errores[] = 'Formato de imagen no permitido para el logo (JPG, PNG o SVG).';
+        return $ruta_actual;
+    }
+
+    if ($file['size'] > 5 * 1024 * 1024) {
+        $errores[] = 'El logo supera los 5MB.';
+        return $ruta_actual;
+    }
+
+    $carpetaFisica = __DIR__ . '/../uploads/sistema';
+    if (!is_dir($carpetaFisica)) {
+        @mkdir($carpetaFisica, 0777, true);
+    }
+
+    $nuevo_nombre = uniqid('logo_') . '.' . $ext;
+    $destino = $carpetaFisica . '/' . $nuevo_nombre;
+
+    if (!move_uploaded_file($tmp_name, $destino)) {
+        $errores[] = 'No se pudo guardar el logo del sistema.';
+        return $ruta_actual;
+    }
+
+    // Borrar logo anterior si existía
+    if ($ruta_actual) {
+        $ruta_fisica = realpath(__DIR__ . '/' . $ruta_actual);
+        if ($ruta_fisica && file_exists($ruta_fisica)) {
+            @unlink($ruta_fisica);
+        }
+    }
+
+    // Guardar ruta relativa desde public: ../uploads/sistema/...
+    return '../uploads/sistema/' . $nuevo_nombre;
 }
 
 // Procesar POST
@@ -115,12 +179,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd = $pdo->prepare("UPDATE admins SET nombre = ?, cargo = ?, foto_perfil = ? WHERE id = ?");
             $upd->execute([$nombre, $cargo, $ruta_foto, $admin_id]);
 
-            // Actualizar variables de sesión
             $_SESSION['admin_nombre'] = $nombre;
             $_SESSION['admin_cargo']  = $cargo;
             $_SESSION['foto_perfil']  = $ruta_foto;
 
-            // Refrescar array $admin
             $admin['nombre']      = $nombre;
             $admin['cargo']       = $cargo;
             $admin['foto_perfil'] = $ruta_foto;
@@ -143,24 +205,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (empty($errores)) {
-            // Generar código de 6 dígitos
             $codigo = (string) random_int(100000, 999999);
 
-            // Marcar códigos anteriores de cambio_email como usados (opcional, para limpiar)
             $updOld = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE admin_id = ? AND tipo = 'cambio_email'");
             $updOld->execute([$admin_id]);
 
-            // Insertar nuevo código
             $ins = $pdo->prepare("
                 INSERT INTO codigos_login (admin_id, tipo, codigo, usado, expires_at)
                 VALUES (?, 'cambio_email', ?, 0, DATE_ADD(NOW(), INTERVAL 15 MINUTE))
             ");
             $ins->execute([$admin_id, $codigo]);
 
-            // Guardar el nuevo correo en sesión
             $_SESSION['cambio_email_nuevo'] = $nuevo_email;
 
-            // Enviar correo simple con mail() – si usas PHPMailer, reemplaza esta parte
             $asunto = 'Código de verificación para cambio de correo';
             $mensajeCorreo = "Hola,\n\nHas solicitado cambiar el correo de acceso al Sistema de Registro.\n\n".
                              "Tu código de verificación es: {$codigo}\n\n".
@@ -196,15 +253,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $codRow = $stmtCod->fetch();
 
             if ($codRow) {
-                // Marcar código como usado
                 $updCod = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE id = ?");
                 $updCod->execute([$codRow['id']]);
 
-                // Actualizar email en admins
                 $updEmail = $pdo->prepare("UPDATE admins SET email = ? WHERE id = ?");
                 $updEmail->execute([$nuevo_email, $admin_id]);
 
-                // Actualizar sesión
                 $_SESSION['admin_email'] = $nuevo_email;
                 $admin['email'] = $nuevo_email;
 
@@ -249,6 +303,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mensaje = 'Opción actualizada.';
         }
     }
+
+    // 7. Guardar nombre + logo del sistema
+    if ($accion === 'guardar_sistema') {
+        $nombre_sis_form = trim($_POST['nombre_sistema'] ?? '');
+        if ($nombre_sis_form === '') {
+            $errores[] = 'El nombre del sistema no puede estar vacío.';
+        }
+
+        $ruta_logo = $logo_sistema;
+        if (empty($errores)) {
+            $ruta_logo = subirLogoSistema('logo_sistema', $logo_sistema, $errores);
+        }
+
+        if (empty($errores)) {
+            if ($config_id) {
+                $upd = $pdo->prepare("UPDATE config_sistema SET nombre_sistema = ?, logo_sistema = ? WHERE id = ?");
+                $upd->execute([$nombre_sis_form, $ruta_logo, $config_id]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO config_sistema (nombre_sistema, logo_sistema) VALUES (?, ?)");
+                $ins->execute([$nombre_sis_form, $ruta_logo]);
+                $config_id = $pdo->lastInsertId();
+            }
+
+            $nombre_sistema = $nombre_sis_form;
+            $logo_sistema   = $ruta_logo;
+
+            $mensaje = 'Nombre y logo del sistema actualizados correctamente.';
+        }
+    }
 }
 
 // Cargar opciones actuales
@@ -263,7 +346,6 @@ $op_zona     = cargarOpcionesPorGrupo($pdo, 'zona');
 $op_genero   = cargarOpcionesPorGrupo($pdo, 'genero');
 $op_cargo    = cargarOpcionesPorGrupo($pdo, 'cargo');
 
-// ¿Hay cambio de correo pendiente?
 $cambio_email_pendiente = $_SESSION['cambio_email_nuevo'] ?? null;
 ?>
 <!DOCTYPE html>
@@ -298,6 +380,60 @@ $cambio_email_pendiente = $_SESSION['cambio_email_nuevo'] ?? null;
       <?php endif; ?>
 
       <div class="config-grid">
+        <!-- Configuración del sistema (nombre + logo) -->
+        <section class="form-card config-card">
+          <h2>
+            <span class="config-icon">
+              <svg viewBox="0 0 24 24" class="icon-svg">
+                <rect x="4" y="6" width="16" height="12" rx="3" fill="none"></rect>
+                <path d="M7 10h10" fill="none"></path>
+              </svg>
+            </span>
+            Identidad del sistema
+          </h2>
+          <p class="config-desc">
+            Cambia el nombre que aparece en la barra superior y el logo redondo que lo acompaña.
+          </p>
+
+          <form method="post" action="" enctype="multipart/form-data">
+            <input type="hidden" name="accion" value="guardar_sistema">
+
+            <div class="perfil-admin-grid">
+              <div class="perfil-admin-foto">
+                <div class="perfil-admin-avatar">
+                  <?php if (!empty($logo_sistema)): ?>
+                    <img src="<?php echo htmlspecialchars($logo_sistema); ?>" alt="Logo del sistema">
+                  <?php else: ?>
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                      <rect x="4" y="6" width="16" height="12" rx="3" fill="none"></rect>
+                      <path d="M7 10h10" fill="none"></path>
+                    </svg>
+                  <?php endif; ?>
+                </div>
+                <div class="form-group">
+                  <label for="logo_sistema">Cambiar logo</label>
+                  <input type="file" name="logo_sistema" id="logo_sistema" accept="image/*">
+                </div>
+              </div>
+
+              <div class="perfil-admin-datos">
+                <div class="form-group">
+                  <label for="nombre_sistema">Nombre del sistema</label>
+                  <input
+                    type="text"
+                    name="nombre_sistema"
+                    id="nombre_sistema"
+                    value="<?php echo htmlspecialchars($nombre_sistema); ?>"
+                    required
+                  >
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary btn-small">Guardar cambios</button>
+          </form>
+        </section>
+
         <!-- Tema -->
         <section class="form-card config-card">
           <h2>
