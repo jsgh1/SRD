@@ -9,6 +9,11 @@ $body_class = 'main-layout tema-' . $tema;
 $errores = [];
 $exito   = '';
 
+// mensaje de éxito vía GET después de redirigir
+if (!empty($_GET['success'])) {
+    $exito = 'Registro guardado correctamente.';
+}
+
 /**
  * Cargar opciones activas de un grupo (afiliado, zona, genero, cargo)
  */
@@ -23,7 +28,6 @@ function cargarOpciones($pdo, $grupo) {
  */
 function subirImagenPersona($campo, $subcarpeta, &$errores) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
-        // No se subió nada para este campo
         return null;
     }
 
@@ -49,7 +53,6 @@ function subirImagenPersona($campo, $subcarpeta, &$errores) {
         return null;
     }
 
-    // Carpeta física: {raíz del proyecto}/uploads/{subcarpeta}
     $baseDir = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
     $carpetaFisica = $baseDir . '/uploads/' . $subcarpeta;
 
@@ -65,7 +68,6 @@ function subirImagenPersona($campo, $subcarpeta, &$errores) {
         return null;
     }
 
-    // Lo que se guarda en BD (relativo a la raíz del proyecto)
     return '/uploads/' . $subcarpeta . '/' . $nuevo_nombre;
 }
 
@@ -92,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estado_registro  = trim($_POST['estado_registro'] ?? 'Pendiente');
     $nota_admin       = trim($_POST['nota_admin'] ?? '');
 
-    // Validaciones cuando el registro se marca como "Completado"
     if ($estado_registro === 'Completado') {
         if ($tipo_documento === '')   $errores[] = 'El tipo de documento es obligatorio.';
         if ($numero_documento === '') $errores[] = 'El número de documento es obligatorio.';
@@ -116,7 +117,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ruta_foto_documento = null;
     $ruta_foto_predio    = null;
 
-    // Subir imágenes solo si no hay errores de validación de datos
     if (empty($errores)) {
         $ruta_foto_persona   = subirImagenPersona('foto_persona',   'personas',   $errores);
         $ruta_foto_documento = subirImagenPersona('foto_documento', 'documentos', $errores);
@@ -154,7 +154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nota_admin
         ]);
 
-        $exito = 'Registro guardado correctamente.';
+        // Redirigir para limpiar el formulario y evitar reenvíos
+        header('Location: registro.php?success=1');
+        exit;
     }
 }
 ?>
@@ -463,8 +465,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <div class="form-actions">
-            <a href="dashboard.php" class="btn-ghost">Cancelar</a>
             <button type="submit" class="btn-primary">Guardar registro</button>
+            <button type="button" class="btn-muted" data-boton-vaciar>Vaciar</button>
           </div>
         </form>
       </section>
@@ -473,5 +475,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
   <?php include __DIR__ . '/../includes/footer.php'; ?>
   <script src="../assets/js/formularios.js"></script>
+
+  <script>
+  // Vaciar formulario sin recargar
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-registro');
+    const btnVaciar = document.querySelector('[data-boton-vaciar]');
+
+    if (form && btnVaciar) {
+      btnVaciar.addEventListener('click', function () {
+        form.reset();
+      });
+    }
+  });
+  </script>
 </body>
 </html>

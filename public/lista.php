@@ -194,9 +194,8 @@ $registros = $stmt_lista->fetchAll();
                       </svg>
                     </a>
 
-                    <!-- Eliminar -->
-                    <form method="post" action="" class="inline-form"
-                          onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
+                    <!-- Eliminar (sin confirm nativo, se usa modal) -->
+                    <form method="post" action="" class="inline-form form-eliminar">
                       <input type="hidden" name="accion" value="eliminar">
                       <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
                       <button type="submit" class="icon-button icon-button-danger" title="Eliminar">
@@ -210,9 +209,8 @@ $registros = $stmt_lista->fetchAll();
                       </button>
                     </form>
 
-                    <!-- PDF -->
-                    <a href="exportar_pdf.php?id=<?php echo $fila['id']; ?>" class="icon-button"
-                       title="Exportar a PDF" target="_blank">
+                    <!-- Exportar (redirige a exportar.php) -->
+                    <a href="exportar.php" class="icon-button" title="Ir a Exportar PDF">
                       <svg viewBox="0 0 24 24" class="icon-svg">
                         <path d="M12 3v12" fill="none"></path>
                         <polyline points="8 11 12 15 16 11" fill="none"></polyline>
@@ -248,6 +246,74 @@ $registros = $stmt_lista->fetchAll();
       </section>
     </main>
   </div>
+
+  <!-- Modal de confirmación de eliminación -->
+  <div class="modal-overlay" id="modal-eliminar">
+    <div class="modal-box">
+      <button type="button" class="modal-close" data-modal-eliminar-cerrar>&times;</button>
+      <h3 class="modal-title">Eliminar registro</h3>
+      <p class="modal-text">
+        ¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.
+      </p>
+      <div class="modal-buttons">
+        <button type="button" class="btn-muted" data-modal-eliminar-cancelar>Cancelar</button>
+        <button type="button" class="btn-primary" data-modal-eliminar-confirmar>Eliminar</button>
+      </div>
+    </div>
+  </div>
+
   <?php include __DIR__ . '/../includes/footer.php'; ?>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const overlay = document.getElementById('modal-eliminar');
+    const btnCerrar = document.querySelector('[data-modal-eliminar-cerrar]');
+    const btnCancelar = document.querySelector('[data-modal-eliminar-cancelar]');
+    const btnConfirmar = document.querySelector('[data-modal-eliminar-confirmar]');
+    const formsEliminar = document.querySelectorAll('.form-eliminar');
+    let formPendiente = null;
+
+    function abrirModal(form) {
+      formPendiente = form;
+      overlay.classList.add('is-open');
+    }
+
+    function cerrarModal() {
+      overlay.classList.remove('is-open');
+      formPendiente = null;
+    }
+
+    formsEliminar.forEach(function (f) {
+      f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        abrirModal(f);
+      });
+    });
+
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModal);
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModal);
+
+    if (btnConfirmar) {
+      btnConfirmar.addEventListener('click', function () {
+        if (formPendiente) {
+          formPendiente.submit();
+        }
+        cerrarModal();
+      });
+    }
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        cerrarModal();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+        cerrarModal();
+      }
+    });
+  });
+  </script>
 </body>
 </html>

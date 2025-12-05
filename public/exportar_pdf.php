@@ -26,14 +26,30 @@ function vpdf($valor) {
     return $valor !== null && $valor !== '' ? htmlspecialchars($valor) : '—';
 }
 
-// Resolver rutas de imágenes (si existen)
-function rutaImagenAbsoluta($relativa) {
+// Resolver rutas de imágenes (si existen) a ruta ABSOLUTA del servidor
+function rutaImagenAbsoluta(?string $relativa): ?string {
     if (!$relativa) return null;
-    // En BD se guarda algo como "/uploads/xxx/archivo.jpg"
-    $ruta = realpath(__DIR__ . '/..' . $relativa);
+
+    $baseDir = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
+    $ruta = null;
+
+    // Caso típico: en BD se guarda algo como "/uploads/xxx/archivo.jpg"
+    if (strpos($relativa, '/uploads/') === 0) {
+        $ruta = $baseDir . $relativa; // /var/www + /uploads/...
+    }
+    // Por compatibilidad: "../uploads/..."
+    elseif (strpos($relativa, '../uploads/') === 0) {
+        $ruta = realpath(__DIR__ . '/' . $relativa);
+    }
+    // Otra cosa: intentamos tal cual
+    else {
+        $ruta = realpath($relativa);
+    }
+
     if ($ruta && file_exists($ruta)) {
         return $ruta;
     }
+
     return null;
 }
 

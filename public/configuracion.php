@@ -1,7 +1,8 @@
 <?php
-// public/configuracion.php
+session_start();
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/mailer.php'; // <-- añadido para usar tu mailer
 
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
@@ -193,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. Solicitar cambio de email (enviar código al nuevo correo)
     if ($accion === 'solicitar_cambio_email') {
-        $nuevo_email = trim($_POST['nuevo_email'] ?? '');
+        $nuevo_email  = trim($_POST['nuevo_email'] ?? '');
         $email_actual = $admin['email'] ?? '';
 
         if ($nuevo_email === '') {
@@ -207,9 +208,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($errores)) {
             $codigo = (string) random_int(100000, 999999);
 
+            // Invalidar códigos anteriores de cambio de correo
             $updOld = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE admin_id = ? AND tipo = 'cambio_email'");
             $updOld->execute([$admin_id]);
 
+            // Insertar nuevo código
             $ins = $pdo->prepare("
                 INSERT INTO codigos_login (admin_id, tipo, codigo, usado, expires_at)
                 VALUES (?, 'cambio_email', ?, 0, DATE_ADD(NOW(), INTERVAL 15 MINUTE))
@@ -218,15 +221,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['cambio_email_nuevo'] = $nuevo_email;
 
-            $asunto = 'Código de verificación para cambio de correo';
-            $mensajeCorreo = "Hola,\n\nHas solicitado cambiar el correo de acceso al Sistema de Registro.\n\n".
-                             "Tu código de verificación es: {$codigo}\n\n".
-                             "Este código es válido por algunos minutos.\n\n".
-                             "Si no solicitaste este cambio, ignora este mensaje.";
-            $cabeceras = "From: no-reply@sistema-registro.local\r\n";
-            @mail($nuevo_email, $asunto, $mensajeCorreo, $cabeceras);
-
-            $mensaje = 'Hemos generado un código de verificación y lo enviamos al nuevo correo. Ingrésalo abajo para confirmar el cambio.';
+            // Enviar correo usando el mismo mailer que el login
+            if (!enviarCodigoLogin($nuevo_email, $codigo)) {
+                $errores[] = 'No se pudo enviar el código al nuevo correo. Contacta al administrador.';
+            } else {
+                $mensaje = 'Hemos generado un código de verificación y lo enviamos al nuevo correo. Ingrésalo abajo para confirmar el cambio.';
+            }
         }
     }
 

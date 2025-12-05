@@ -6,7 +6,6 @@ require_once __DIR__ . '/../config/db.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
-
 $stmt = $pdo->query("SELECT COUNT(*) AS total FROM personas");
 $total_personas = (int)$stmt->fetch()['total'];
 
@@ -140,15 +139,15 @@ $ultimos = $stmt->fetchAll();
           <span>Ver lista completa</span>
         </a>
         <a href="exportar.php" class="btn-outline btn-export-pdf">
-        <span class="btn-icon-svg">
-          <svg viewBox="0 0 24 24" class="icon-svg">
-            <path d="M12 3v12" fill="none"></path>
-            <polyline points="8 11 12 15 16 11" fill="none"></polyline>
-            <rect x="4" y="15" width="16" height="4" rx="2"></rect>
-          </svg>
-        </span>
-        <span>Exportar PDF</span>
-      </a>
+          <span class="btn-icon-svg">
+            <svg viewBox="0 0 24 24" class="icon-svg">
+              <path d="M12 3v12" fill="none"></path>
+              <polyline points="8 11 12 15 16 11" fill="none"></polyline>
+              <rect x="4" y="15" width="16" height="4" rx="2"></rect>
+            </svg>
+          </span>
+          <span>Exportar PDF</span>
+        </a>
       </div>
     </div>
     <div class="dashboard-hero-side">
@@ -215,7 +214,11 @@ $ultimos = $stmt->fetchAll();
                   <td><?php echo htmlspecialchars($fila['tipo_documento']); ?></td>
                   <td><?php echo htmlspecialchars($fila['numero_documento']); ?></td>
                   <td><?php echo htmlspecialchars($fila['fecha_registro']); ?></td>
-                  <td><?php echo htmlspecialchars($fila['estado_registro']); ?></td>
+                  <td>
+                    <span class="chip-estado chip-<?php echo $fila['estado_registro'] === 'Completado' ? 'completado' : 'pendiente'; ?>">
+                      <?php echo htmlspecialchars($fila['estado_registro']); ?>
+                    </span>
+                  </td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
@@ -227,7 +230,6 @@ $ultimos = $stmt->fetchAll();
   <?php include __DIR__ . '/../includes/footer.php'; ?>
 
   <script>
-    // Datos enviados desde PHP
     const labelsDias   = <?php echo json_encode($labels_dias); ?>;
     const valoresDias  = <?php echo json_encode($valores_dias); ?>;
 
@@ -266,9 +268,7 @@ $ultimos = $stmt->fetchAll();
           data: valoresGenero
         }]
       },
-      options: {
-        responsive: true
-      }
+      options: { responsive: true }
     });
     
     const ctxDoc = document.getElementById('chartDocumento').getContext('2d');
@@ -280,9 +280,7 @@ $ultimos = $stmt->fetchAll();
           data: valoresDoc
         }]
       },
-      options: {
-        responsive: true
-      }
+      options: { responsive: true }
     });
   </script>
 </body>

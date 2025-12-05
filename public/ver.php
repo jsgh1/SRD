@@ -30,27 +30,22 @@ function v($valor) {
 function ruta_publica_upload(?string $ruta): ?string {
     if (!$ruta) return null;
 
-    // Si ya es URL absoluta, la dejamos
     if (preg_match('~^https?://~i', $ruta) || strpos($ruta, '//') === 0) {
         return $ruta;
     }
 
-    // Si ya comienza con ../ (por ejemplo ../uploads/...)
     if (strpos($ruta, '../') === 0) {
         return $ruta;
     }
 
-    // Si viene como /uploads/..., anteponer ..
     if (strpos($ruta, '/uploads/') === 0) {
         return '..' . $ruta;
     }
 
-    // Si viene como uploads/..., anteponer ../
     if (strpos($ruta, 'uploads/') === 0) {
         return '../' . $ruta;
     }
 
-    // Cualquier otra cosa se devuelve tal cual
     return $ruta;
 }
 ?>
@@ -143,6 +138,7 @@ function ruta_publica_upload(?string $ruta): ?string {
               <img
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_persona'])); ?>"
                 alt="Foto persona"
+                class="detalle-img-clickable"
               >
             </div>
           <?php endif; ?>
@@ -153,6 +149,7 @@ function ruta_publica_upload(?string $ruta): ?string {
               <img
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_documento'])); ?>"
                 alt="Foto documento"
+                class="detalle-img-clickable"
               >
             </div>
           <?php endif; ?>
@@ -163,6 +160,7 @@ function ruta_publica_upload(?string $ruta): ?string {
               <img
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_predio'])); ?>"
                 alt="Foto predio"
+                class="detalle-img-clickable"
               >
             </div>
           <?php endif; ?>
@@ -195,7 +193,7 @@ function ruta_publica_upload(?string $ruta): ?string {
           </a>
 
           <a
-            href="exportar_pdf.php?id=<?php echo $persona['id']; ?>"
+            href="exportar.php"
             class="btn-outline btn-icon btn-export-pdf"
           >
             <span class="btn-icon-svg">
@@ -209,8 +207,53 @@ function ruta_publica_upload(?string $ruta): ?string {
           </a>
         </div>
       </section>
+
+      <!-- Modal de imagen ampliada -->
+      <div class="modal-overlay" id="modal-imagen">
+        <div class="modal-image-box">
+          <button type="button" class="modal-close" data-modal-imagen-cerrar>&times;</button>
+          <img src="" alt="Imagen ampliada" id="modal-imagen-src">
+        </div>
+      </div>
     </main>
   </div>
   <?php include __DIR__ . '/../includes/footer.php'; ?>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const overlay = document.getElementById('modal-imagen');
+    const imgModal = document.getElementById('modal-imagen-src');
+    const imgs = document.querySelectorAll('.detalle-img-clickable');
+    const btnCerrar = document.querySelector('[data-modal-imagen-cerrar]');
+
+    if (!overlay || !imgModal || !btnCerrar || imgs.length === 0) return;
+
+    imgs.forEach(function (img) {
+      img.addEventListener('click', function () {
+        imgModal.src = img.src;
+        overlay.classList.add('is-open');
+      });
+    });
+
+    function cerrarModal() {
+      overlay.classList.remove('is-open');
+      imgModal.src = '';
+    }
+
+    btnCerrar.addEventListener('click', cerrarModal);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        cerrarModal();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+        cerrarModal();
+      }
+    });
+  });
+  </script>
 </body>
 </html>

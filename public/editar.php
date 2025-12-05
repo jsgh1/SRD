@@ -26,8 +26,6 @@ function cargarOpciones($pdo, $grupo) {
 
 /**
  * Convierte una ruta de BD en ruta pública para <img src="...">
- * - Si empieza por /uploads/... => la convertimos a ../uploads/...
- * - Si ya es relativa de otra forma, se deja tal cual.
  */
 function ruta_publica_upload(?string $ruta): ?string {
     if (!$ruta) return null;
@@ -38,12 +36,11 @@ function ruta_publica_upload(?string $ruta): ?string {
 }
 
 /**
- * Sube una nueva imagen (si se envía) y devuelve la ruta para BD (/uploads/{subcarpeta}/archivo.jpg),
- * borrando la imagen anterior si existía.
+ * Sube una nueva imagen (si se envía) y devuelve la ruta para BD,
+ * borrando la anterior si existía.
  */
 function subirImagenEditarGeneral($campo, $subcarpeta, &$errores, $ruta_actual) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
-        // No se subió nada nuevo, mantenemos la ruta actual
         return $ruta_actual;
     }
 
@@ -69,7 +66,6 @@ function subirImagenEditarGeneral($campo, $subcarpeta, &$errores, $ruta_actual) 
         return $ruta_actual;
     }
 
-    // Carpeta física: {raíz del proyecto}/uploads/{subcarpeta}
     $baseDir = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
     $carpetaFisica = $baseDir . '/uploads/' . $subcarpeta;
 
@@ -85,9 +81,7 @@ function subirImagenEditarGeneral($campo, $subcarpeta, &$errores, $ruta_actual) 
         return $ruta_actual;
     }
 
-    // Borrar imagen anterior si existía
     if ($ruta_actual) {
-        // Puede venir como /uploads/... o ../uploads/...
         if (strpos($ruta_actual, '/uploads/') === 0) {
             $ruta_fisica = realpath($baseDir . $ruta_actual);
         } elseif (strpos($ruta_actual, '../uploads/') === 0) {
@@ -101,17 +95,14 @@ function subirImagenEditarGeneral($campo, $subcarpeta, &$errores, $ruta_actual) 
         }
     }
 
-    // Ruta nueva para BD
     return '/uploads/' . $subcarpeta . '/' . $nuevo_nombre;
 }
 
-// Opciones de selects
 $op_afiliado = cargarOpciones($pdo, 'afiliado');
 $op_zona     = cargarOpciones($pdo, 'zona');
 $op_genero   = cargarOpciones($pdo, 'genero');
 $op_cargo    = cargarOpciones($pdo, 'cargo');
 
-// Cargar persona
 $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = ?");
 $stmt->execute([$id]);
 $persona = $stmt->fetch();
@@ -176,7 +167,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errores[] = 'El correo electrónico no tiene un formato válido.';
     }
 
-    // Subida de imágenes solo si no hay errores de campos
     if (empty($errores)) {
         $ruta_foto_persona_bd   = subirImagenEditarGeneral('foto_persona',   'personas',   $errores, $ruta_foto_persona_bd);
         $ruta_foto_documento_bd = subirImagenEditarGeneral('foto_documento', 'documentos', $errores, $ruta_foto_documento_bd);
@@ -229,7 +219,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $exito = 'Registro actualizado correctamente.';
 
-        // Refrescar datos de persona por si hay más campos calculados
         $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = ?");
         $stmt->execute([$id]);
         $persona = $stmt->fetch();
@@ -568,7 +557,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <div class="form-actions">
-            <a href="lista.php" class="btn-ghost">Volver</a>
+            <a href="lista.php" class="btn-muted">Volver</a>
             <button type="submit" class="btn-primary">Guardar cambios</button>
           </div>
         </form>
