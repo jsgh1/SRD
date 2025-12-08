@@ -1668,6 +1668,35 @@ body.tema-oscuro .btn-muted:hover {
   background: #111827;
 }
 
+/* ===== Ajustes de botones fantasma (ghost) en modo oscuro ===== */
+
+.btn-ghost {
+  background-color: transparent;
+  border: 1px solid #d1d5db;
+  color: #111827;
+}
+
+/* Versión dark: borde y texto claros */
+body.tema-oscuro .btn-ghost {
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+body.tema-oscuro .btn-ghost:hover {
+  background-color: #1f2937;
+  border-color: #6b7280;
+}
+
+/* Si tienes un ghost pequeño (por ejemplo en formularios) también queda bien */
+body.tema-oscuro .btn-ghost.btn-small {
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+body.tema-oscuro .btn-ghost.btn-small:hover {
+  background-color: #1f2937;
+  border-color: #6b7280;
+}
+
 /* Checkboxes: color según tema */
 body.tema-claro input[type="checkbox"] {
   accent-color: #111827;
@@ -1689,6 +1718,18 @@ body.tema-oscuro .config-opciones-tabla .icon-button {
 /* =========================================================
    configuracion.php - CONFIGURACIÓN SISTEMA
    ========================================================= */
+
+/* ===== Ajustes de separación en Configuración ===== */
+
+.config-card {
+  margin-bottom: 28px; 
+}
+.config-card > * + * {
+  margin-top: 14px;
+}
+.config-opciones-card {
+  margin-bottom: 32px;
+}
 
 .config-grid {
   display: grid;

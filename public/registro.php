@@ -9,11 +9,6 @@ $body_class = 'main-layout tema-' . $tema;
 $errores = [];
 $exito   = '';
 
-// mensaje de éxito vía GET después de redirigir
-if (!empty($_GET['success'])) {
-    $exito = 'Registro guardado correctamente.';
-}
-
 /**
  * Cargar opciones activas de un grupo (afiliado, zona, genero, cargo)
  */
@@ -28,6 +23,7 @@ function cargarOpciones($pdo, $grupo) {
  */
 function subirImagenPersona($campo, $subcarpeta, &$errores) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
+        // No se subió nada para este campo
         return null;
     }
 
@@ -53,6 +49,7 @@ function subirImagenPersona($campo, $subcarpeta, &$errores) {
         return null;
     }
 
+    // Carpeta física: {raíz del proyecto}/uploads/{subcarpeta}
     $baseDir = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
     $carpetaFisica = $baseDir . '/uploads/' . $subcarpeta;
 
@@ -68,6 +65,7 @@ function subirImagenPersona($campo, $subcarpeta, &$errores) {
         return null;
     }
 
+    // Lo que se guarda en BD (relativo a la raíz del proyecto)
     return '/uploads/' . $subcarpeta . '/' . $nuevo_nombre;
 }
 
@@ -76,6 +74,11 @@ $op_afiliado = cargarOpciones($pdo, 'afiliado');
 $op_zona     = cargarOpciones($pdo, 'zona');
 $op_genero   = cargarOpciones($pdo, 'genero');
 $op_cargo    = cargarOpciones($pdo, 'cargo');
+
+// Cargar campos extra del registro
+$stmtCampos = $pdo->query("SELECT * FROM campos_extra_registro WHERE activo = 1 ORDER BY grupo, orden, id");
+$campos_extra = $stmtCampos->fetchAll(PDO::FETCH_ASSOC);
+$extras_valores = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -94,6 +97,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estado_registro  = trim($_POST['estado_registro'] ?? 'Pendiente');
     $nota_admin       = trim($_POST['nota_admin'] ?? '');
 
+    // Valores de campos extra
+    $extras_valores = $_POST['extra'] ?? [];
+
+    // Validaciones cuando el registro se marca como "Completado"
     if ($estado_registro === 'Completado') {
         if ($tipo_documento === '')   $errores[] = 'El tipo de documento es obligatorio.';
         if ($numero_documento === '') $errores[] = 'El número de documento es obligatorio.';
@@ -107,6 +114,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($cargo === '')            $errores[] = 'El cargo es obligatorio.';
         if ($nombre_predio === '')    $errores[] = 'El nombre del predio es obligatorio.';
         if ($correo_elec === '')      $errores[] = 'El correo electrónico es obligatorio.';
+
+        // Campos extra requeridos
+        foreach ($campos_extra as $campo) {
+            if (!empty($campo['requerido'])) {
+                $valorExtra = trim($extras_valores[$campo['id']] ?? '');
+                if ($valorExtra === '') {
+                    $errores[] = 'El campo "' . $campo['nombre_label'] . '" es obligatorio.';
+                }
+            }
+        }
     }
 
     if ($correo_elec !== '' && !filter_var($correo_elec, FILTER_VALIDATE_EMAIL)) {
@@ -117,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ruta_foto_documento = null;
     $ruta_foto_predio    = null;
 
+    // Subir imágenes solo si no hay errores de validación de datos
     if (empty($errores)) {
         $ruta_foto_persona   = subirImagenPersona('foto_persona',   'personas',   $errores);
         $ruta_foto_documento = subirImagenPersona('foto_documento', 'documentos', $errores);
@@ -154,9 +172,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nota_admin
         ]);
 
-        // Redirigir para limpiar el formulario y evitar reenvíos
-        header('Location: registro.php?success=1');
-        exit;
+        $persona_id = (int)$pdo->lastInsertId();
+
+        // Guardar campos extra
+        if ($persona_id > 0 && !empty($campos_extra)) {
+            $insExtra = $pdo->prepare("
+                INSERT INTO personas_campos_extra (persona_id, campo_id, valor)
+                VALUES (?, ?, ?)
+            ");
+
+            foreach ($campos_extra as $campo) {
+                $cid = (int)$campo['id'];
+                $valorExtra = isset($extras_valores[$cid]) ? trim($extras_valores[$cid]) : '';
+
+                if ($valorExtra === '' && empty($campo['requerido'])) {
+                    continue;
+                }
+
+                $insExtra->execute([$persona_id, $cid, $valorExtra]);
+            }
+        }
+
+        $exito = 'Registro guardado correctamente.';
+
+        // Limpiar todos los campos del formulario
+        $tipo_documento   = '';
+        $numero_documento = '';
+        $nombres          = '';
+        $apellidos        = '';
+        $afiliado         = '';
+        $zona             = '';
+        $genero           = '';
+        $fecha_nacimiento = '';
+        $telefono         = '';
+        $cargo            = '';
+        $nombre_predio    = '';
+        $correo_elec      = '';
+        $estado_registro  = 'Pendiente';
+        $nota_admin       = '';
+        $extras_valores   = [];
     }
 }
 ?>
@@ -257,6 +311,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   value="<?php echo htmlspecialchars($apellidos ?? ''); ?>"
                 >
               </div>
+
+              <!-- Campos extra del grupo "persona" -->
+              <?php foreach ($campos_extra as $campo): ?>
+                <?php if ($campo['grupo'] === 'persona'): ?>
+                  <?php
+                    $cid = $campo['id'];
+                    $idHtml = 'extra_' . $cid;
+                    $valorExtra = htmlspecialchars($extras_valores[$cid] ?? '');
+                  ?>
+                  <div class="form-group">
+                    <label for="<?php echo $idHtml; ?>">
+                      <?php echo htmlspecialchars($campo['nombre_label']); ?>
+                      <?php if (!empty($campo['requerido'])): ?>
+                        <span class="campo-requerido">*</span>
+                      <?php endif; ?>
+                    </label>
+
+                    <?php if ($campo['tipo'] === 'textarea'): ?>
+                      <textarea
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        rows="2"
+                      ><?php echo $valorExtra; ?></textarea>
+                    <?php elseif ($campo['tipo'] === 'numero'): ?>
+                      <input
+                        type="number"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php elseif ($campo['tipo'] === 'fecha'): ?>
+                      <input
+                        type="date"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php else: ?>
+                      <input
+                        type="text"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              <?php endforeach; ?>
             </div>
           </div>
 
@@ -331,6 +433,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   value="<?php echo htmlspecialchars($telefono ?? ''); ?>"
                 >
               </div>
+
+              <!-- Campos extra del grupo "contacto" -->
+              <?php foreach ($campos_extra as $campo): ?>
+                <?php if ($campo['grupo'] === 'contacto'): ?>
+                  <?php
+                    $cid = $campo['id'];
+                    $idHtml = 'extra_' . $cid;
+                    $valorExtra = htmlspecialchars($extras_valores[$cid] ?? '');
+                  ?>
+                  <div class="form-group">
+                    <label for="<?php echo $idHtml; ?>">
+                      <?php echo htmlspecialchars($campo['nombre_label']); ?>
+                      <?php if (!empty($campo['requerido'])): ?>
+                        <span class="campo-requerido">*</span>
+                      <?php endif; ?>
+                    </label>
+
+                    <?php if ($campo['tipo'] === 'textarea'): ?>
+                      <textarea
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        rows="2"
+                      ><?php echo $valorExtra; ?></textarea>
+                    <?php elseif ($campo['tipo'] === 'numero'): ?>
+                      <input
+                        type="number"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php elseif ($campo['tipo'] === 'fecha'): ?>
+                      <input
+                        type="date"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php else: ?>
+                      <input
+                        type="text"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              <?php endforeach; ?>
             </div>
           </div>
 
@@ -381,6 +531,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   value="<?php echo htmlspecialchars($correo_elec ?? ''); ?>"
                 >
               </div>
+
+              <!-- Campos extra del grupo "predio" -->
+              <?php foreach ($campos_extra as $campo): ?>
+                <?php if ($campo['grupo'] === 'predio'): ?>
+                  <?php
+                    $cid = $campo['id'];
+                    $idHtml = 'extra_' . $cid;
+                    $valorExtra = htmlspecialchars($extras_valores[$cid] ?? '');
+                  ?>
+                  <div class="form-group">
+                    <label for="<?php echo $idHtml; ?>">
+                      <?php echo htmlspecialchars($campo['nombre_label']); ?>
+                      <?php if (!empty($campo['requerido'])): ?>
+                        <span class="campo-requerido">*</span>
+                      <?php endif; ?>
+                    </label>
+
+                    <?php if ($campo['tipo'] === 'textarea'): ?>
+                      <textarea
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        rows="2"
+                      ><?php echo $valorExtra; ?></textarea>
+                    <?php elseif ($campo['tipo'] === 'numero'): ?>
+                      <input
+                        type="number"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php elseif ($campo['tipo'] === 'fecha'): ?>
+                      <input
+                        type="date"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php else: ?>
+                      <input
+                        type="text"
+                        id="<?php echo $idHtml; ?>"
+                        name="extra[<?php echo $cid; ?>]"
+                        value="<?php echo $valorExtra; ?>"
+                      >
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              <?php endforeach; ?>
             </div>
           </div>
 
@@ -465,8 +663,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <div class="form-actions">
+            <a href="registro.php" class="btn-ghost">Vaciar</a>
             <button type="submit" class="btn-primary">Guardar registro</button>
-            <button type="button" class="btn-muted" data-boton-vaciar>Vaciar</button>
           </div>
         </form>
       </section>
@@ -475,19 +673,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
   <?php include __DIR__ . '/../includes/footer.php'; ?>
   <script src="../assets/js/formularios.js"></script>
-
-  <script>
-  // Vaciar formulario sin recargar
-  document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('form-registro');
-    const btnVaciar = document.querySelector('[data-boton-vaciar]');
-
-    if (form && btnVaciar) {
-      btnVaciar.addEventListener('click', function () {
-        form.reset();
-      });
-    }
-  });
-  </script>
 </body>
 </html>

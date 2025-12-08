@@ -8,26 +8,92 @@ $body_class = 'main-layout tema-' . $tema;
 
 $mensaje = '';
 
-// Guardar nombre_pdf si viene POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'guardar_nombre_pdf') {
+/**
+ * Helper para mostrar valores seguros
+ */
+function v_exportar($valor) {
+    return ($valor !== null && $valor !== '') ? htmlspecialchars($valor) : '—';
+}
+
+/**
+ * Campos configurados para mostrarse en EXPORTAR
+ * (tabla campos_registro, columna mostrar_en_exportar)
+ */
+function obtenerCamposExportar(PDO $pdo) {
+    $sql = "
+        SELECT nombre_campo, etiqueta
+        FROM campos_registro
+        WHERE mostrar_en_exportar = 1
+        ORDER BY orden ASC, id ASC
+    ";
+    $stmt = $pdo->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$campos_exportar = obtenerCamposExportar($pdo);
+
+/* ============================
+   Filtros para la tabla
+   ============================ */
+
+// Buscador general
+$search = trim($_GET['search'] ?? '');
+
+// Filtro por estado de registro
+$filtro_estado = trim($_GET['estado'] ?? '');
+
+// Construcción del WHERE
+$where  = [];
+$params = [];
+
+if ($search !== '') {
+    $where[] = "(nombres LIKE ? OR apellidos LIKE ? OR numero_documento LIKE ?)";
+    $like = '%' . $search . '%';
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
+}
+
+if ($filtro_estado !== '') {
+    $where[]  = "estado_registro = ?";
+    $params[] = $filtro_estado;
+}
+
+$where_sql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+/* ============================
+   Guardar nombre_pdf si viene POST
+   ============================ */
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['accion']) &&
+    $_POST['accion'] === 'guardar_nombre_pdf'
+) {
     $id = (int)($_POST['id'] ?? 0);
     $nombre_pdf = trim($_POST['nombre_pdf'] ?? '');
 
     if ($id > 0) {
-        $stmt = $pdo->prepare("UPDATE personas SET nombre_pdf = ? WHERE id = ?");
-        $stmt->execute([$nombre_pdf !== '' ? $nombre_pdf : null, $id]);
+        $stmtUpd = $pdo->prepare("UPDATE personas SET nombre_pdf = ? WHERE id = ?");
+        $stmtUpd->execute([$nombre_pdf !== '' ? $nombre_pdf : null, $id]);
         $mensaje = 'Nombre de PDF actualizado.';
     }
 }
 
-// Obtener últimos registros (puedes ajustar el LIMIT)
-$stmt = $pdo->query("
-    SELECT id, nombres, apellidos, tipo_documento, numero_documento, fecha_registro, nombre_pdf
+/* ============================
+   Obtener registros (con filtros)
+   ============================ */
+
+$sql = "
+    SELECT *
     FROM personas
+    $where_sql
     ORDER BY fecha_registro DESC
     LIMIT 100
-");
-$registros = $stmt->fetchAll();
+";
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -48,16 +114,43 @@ $registros = $stmt->fetchAll();
         <h2>Selecciona un registro</h2>
         <p>
           Aquí puedes asignar un nombre personalizado para el archivo PDF de cada registro
-          y descargar la ficha en formato PDF.
+          y descargar la ficha en formato PDF. Puedes usar el buscador para encontrar más rápido
+          el registro que necesitas.
         </p>
+
         <?php if ($mensaje): ?>
           <div class="alert" style="margin-top:8px;"><?php echo htmlspecialchars($mensaje); ?></div>
         <?php endif; ?>
+
+        <!-- Filtros de búsqueda para exportar -->
+        <form method="get" action="" class="consulta-form" style="margin-top:10px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="search">Buscar (nombre, apellido o documento)</label>
+              <input
+                type="text"
+                id="search"
+                name="search"
+                value="<?php echo htmlspecialchars($search); ?>"
+                placeholder="Ej: Juan, Pérez o número de documento"
+              >
+            </div>
+            <div class="form-group">
+              <label for="estado">Estado del registro</label>
+              <select name="estado" id="estado">
+                <option value="">Todos</option>
+                <option value="Pendiente"   <?php echo $filtro_estado === 'Pendiente'   ? 'selected' : ''; ?>>Pendiente</option>
+                <option value="Completado"  <?php echo $filtro_estado === 'Completado'  ? 'selected' : ''; ?>>Completado</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary btn-small">Aplicar filtros</button>
+        </form>
       </section>
 
       <section class="tabla-recientes exportar-tabla">
         <?php if (empty($registros)): ?>
-          <p>No hay registros para exportar.</p>
+          <p>No hay registros para exportar con los filtros seleccionados.</p>
         <?php else: ?>
           <div class="tabla-scroll">
             <table>
@@ -65,6 +158,11 @@ $registros = $stmt->fetchAll();
                 <tr>
                   <th>Nombre</th>
                   <th>Documento</th>
+                  <?php if (!empty($campos_exportar)): ?>
+                    <?php foreach ($campos_exportar as $campo): ?>
+                      <th><?php echo htmlspecialchars($campo['etiqueta']); ?></th>
+                    <?php endforeach; ?>
+                  <?php endif; ?>
                   <th>Fecha registro</th>
                   <th>Nombre del PDF</th>
                   <th>Acciones</th>
@@ -73,18 +171,37 @@ $registros = $stmt->fetchAll();
               <tbody>
                 <?php foreach ($registros as $fila): ?>
                   <tr>
-                    <td><?php echo htmlspecialchars($fila['nombres'] . ' ' . $fila['apellidos']); ?></td>
-                    <td><?php echo htmlspecialchars($fila['tipo_documento'] . ' ' . $fila['numero_documento']); ?></td>
-                    <td><?php echo htmlspecialchars($fila['fecha_registro']); ?></td>
+                    <td>
+                      <?php echo v_exportar(($fila['nombres'] ?? '') . ' ' . ($fila['apellidos'] ?? '')); ?>
+                    </td>
+                    <td>
+                      <?php
+                        $doc = trim(($fila['tipo_documento'] ?? '') . ' ' . ($fila['numero_documento'] ?? ''));
+                        echo v_exportar($doc);
+                      ?>
+                    </td>
+
+                    <?php if (!empty($campos_exportar)): ?>
+                      <?php foreach ($campos_exportar as $campo): ?>
+                        <?php
+                          $nombre_campo = $campo['nombre_campo'];
+                          $valor = $fila[$nombre_campo] ?? null;
+                        ?>
+                        <td><?php echo v_exportar($valor); ?></td>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+
+                    <td><?php echo v_exportar($fila['fecha_registro'] ?? null); ?></td>
+
                     <td>
                       <form method="post" action="" class="inline-form exportar-nombre-form">
                         <input type="hidden" name="accion" value="guardar_nombre_pdf">
-                        <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
+                        <input type="hidden" name="id" value="<?php echo (int)$fila['id']; ?>">
                         <input
                           type="text"
                           name="nombre_pdf"
                           value="<?php echo htmlspecialchars($fila['nombre_pdf'] ?? ''); ?>"
-                          placeholder="Ej: Ficha_<?php echo htmlspecialchars($fila['numero_documento']); ?>"
+                          placeholder="Ej: Ficha_<?php echo htmlspecialchars($fila['numero_documento'] ?? ''); ?>"
                         >
                         <button type="submit" class="icon-button" title="Guardar nombre PDF">
                           <svg viewBox="0 0 24 24" class="icon-svg">
@@ -93,9 +210,10 @@ $registros = $stmt->fetchAll();
                         </button>
                       </form>
                     </td>
+
                     <td class="tabla-acciones">
                       <a
-                        href="exportar_pdf.php?id=<?php echo $fila['id']; ?>"
+                        href="exportar_pdf.php?id=<?php echo (int)$fila['id']; ?>"
                         class="icon-button"
                         title="Descargar PDF"
                       >
@@ -106,7 +224,7 @@ $registros = $stmt->fetchAll();
                         </svg>
                       </a>
                       <a
-                        href="ver.php?id=<?php echo $fila['id']; ?>"
+                        href="ver.php?id=<?php echo (int)$fila['id']; ?>"
                         class="icon-button"
                         title="Ver ficha"
                       >

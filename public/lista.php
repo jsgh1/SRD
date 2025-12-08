@@ -7,13 +7,27 @@ $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
 // Aceptamos tanto ?search= como ?q= (buscador del header)
-$search          = trim($_GET['search'] ?? ($_GET['q'] ?? ''));
-$filtro_estado   = trim($_GET['estado'] ?? '');
-$filtro_tipo_doc = trim($_GET['tipo_documento'] ?? '');
+$search = trim($_GET['search'] ?? ($_GET['q'] ?? ''));
 
 $por_pagina = 20;
 $pagina     = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset     = ($pagina - 1) * $por_pagina;
+
+// --- Cargar filtros configurados ---
+$stmtFiltros = $pdo->query("
+    SELECT *
+    FROM campos_filtros_lista
+    WHERE activo = 1
+    ORDER BY orden, id
+");
+$filtros_config = $stmtFiltros->fetchAll(PDO::FETCH_ASSOC);
+
+// Valores actuales de filtros (GET)
+$valores_filtros = [];
+foreach ($filtros_config as $filtro) {
+    $key = 'f' . $filtro['id']; // ej: f1, f2...
+    $valores_filtros[$filtro['id']] = trim($_GET[$key] ?? '');
+}
 
 // --- Eliminar registro ---
 if (
@@ -31,7 +45,6 @@ if (
         if ($fila) {
             foreach (['foto_persona', 'foto_documento', 'foto_predio'] as $campo) {
                 if (!empty($fila[$campo])) {
-                    // En BD tienes algo tipo: /uploads/personas/archivo.jpg
                     $ruta = __DIR__ . '/..' . $fila[$campo];
                     if (file_exists($ruta)) {
                         @unlink($ruta);
@@ -44,7 +57,6 @@ if (
         }
     }
 
-    // Redirigir quitando page pero respetando filtros
     $qs = $_GET;
     unset($qs['page']);
     $query_string = http_build_query($qs);
@@ -52,10 +64,76 @@ if (
     exit;
 }
 
-// --- Construcción de filtros ---
+// --- Helper: opciones para filtros tipo select ---
+function obtenerOpcionesFiltro(PDO $pdo, string $campo): array {
+    // Campos dinámicos: vienen como extra_ID
+    if (strpos($campo, 'extra_') === 0) {
+        $campoId = (int)substr($campo, 6);
+        if ($campoId <= 0) {
+            return [];
+        }
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT valor
+            FROM personas_campos_extra
+            WHERE campo_id = ?
+              AND valor IS NOT NULL
+              AND valor <> ''
+            ORDER BY valor
+        ");
+        $stmt->execute([$campoId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    switch ($campo) {
+        case 'estado_registro':
+            return ['Pendiente', 'Completado'];
+
+        case 'tipo_documento':
+            return [
+                'Registro Civil',
+                'Tarjeta de Identidad',
+                'Cédula de Ciudadanía',
+                'Cédula de Extranjería',
+                'NIT'
+            ];
+
+        case 'afiliado':
+        case 'zona':
+        case 'genero':
+        case 'cargo':
+            $stmt = $pdo->prepare("
+                SELECT valor
+                FROM opciones_select
+                WHERE grupo = ? AND activo = 1
+                ORDER BY valor
+            ");
+            $stmt->execute([$campo]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        default:
+            $permitidos = [
+                'nombre_predio',
+                'telefono',
+                'correo_electronico',
+                'nombres',
+                'apellidos',
+                'numero_documento'
+            ];
+            if (!in_array($campo, $permitidos, true)) {
+                return [];
+            }
+
+            $sql = "SELECT DISTINCT $campo AS valor FROM personas WHERE $campo IS NOT NULL AND $campo <> '' ORDER BY $campo";
+            $stmt = $pdo->query($sql);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+}
+
+// --- Construcción de filtros para el WHERE ---
 $where  = [];
 $params = [];
 
+// Buscador general
 if ($search !== '') {
     $where[] = "(nombres LIKE ? OR apellidos LIKE ? OR numero_documento LIKE ?)";
     $like = '%' . $search . '%';
@@ -64,14 +142,75 @@ if ($search !== '') {
     $params[] = $like;
 }
 
-if ($filtro_estado !== '') {
-    $where[] = "estado_registro = ?";
-    $params[] = $filtro_estado;
-}
+// Campos que permitimos filtrar desde config (para evitar inyección)
+$campos_permitidos = [
+    'estado_registro',
+    'tipo_documento',
+    'afiliado',
+    'zona',
+    'genero',
+    'cargo',
+    'nombre_predio',
+    'telefono',
+    'correo_electronico',
+    'nombres',
+    'apellidos',
+    'numero_documento'
+];
 
-if ($filtro_tipo_doc !== '') {
-    $where[] = "tipo_documento = ?";
-    $params[] = $filtro_tipo_doc;
+// Filtros dinámicos (configurables)
+foreach ($filtros_config as $filtro) {
+    $columna = $filtro['nombre_campo'];
+    $valor   = $valores_filtros[$filtro['id']] ?? '';
+    if ($valor === '') {
+        continue;
+    }
+
+    $tipo = $filtro['tipo_control'] ?? 'select';
+
+    // Campo dinámico: nombre_campo = extra_ID
+    if (strpos($columna, 'extra_') === 0) {
+        $campoId = (int)substr($columna, 6);
+        if ($campoId <= 0) {
+            continue;
+        }
+
+        if ($tipo === 'texto') {
+            $where[] = "EXISTS (
+                SELECT 1
+                FROM personas_campos_extra pce
+                WHERE pce.persona_id = personas.id
+                  AND pce.campo_id = ?
+                  AND pce.valor LIKE ?
+            )";
+            $params[] = $campoId;
+            $params[] = '%' . $valor . '%';
+        } else {
+            $where[] = "EXISTS (
+                SELECT 1
+                FROM personas_campos_extra pce
+                WHERE pce.persona_id = personas.id
+                  AND pce.campo_id = ?
+                  AND pce.valor = ?
+            )";
+            $params[] = $campoId;
+            $params[] = $valor;
+        }
+        continue;
+    }
+
+    // Campos normales (base)
+    if (!in_array($columna, $campos_permitidos, true)) {
+        continue;
+    }
+
+    if ($tipo === 'texto') {
+        $where[]  = "$columna LIKE ?";
+        $params[] = '%' . $valor . '%';
+    } else {
+        $where[]  = "$columna = ?";
+        $params[] = $valor;
+    }
 }
 
 $where_sql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -93,7 +232,7 @@ $sql = "
 ";
 $stmt_lista = $pdo->prepare($sql);
 $stmt_lista->execute($params);
-$registros = $stmt_lista->fetchAll();
+$registros = $stmt_lista->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -114,6 +253,7 @@ $registros = $stmt_lista->fetchAll();
       <section class="form-card">
         <h2>Filtros de búsqueda</h2>
         <form method="get" action="">
+          <!-- Buscador general -->
           <div class="form-row">
             <div class="form-group">
               <label for="search">Buscar (nombre, apellido o documento)</label>
@@ -124,26 +264,57 @@ $registros = $stmt_lista->fetchAll();
                 value="<?php echo htmlspecialchars($search); ?>"
               >
             </div>
-            <div class="form-group">
-              <label for="estado">Estado</label>
-              <select name="estado" id="estado">
-                <option value="">Todos</option>
-                <option value="Pendiente"  <?php echo $filtro_estado === 'Pendiente'  ? 'selected' : ''; ?>>Pendiente</option>
-                <option value="Completado" <?php echo $filtro_estado === 'Completado' ? 'selected' : ''; ?>>Completado</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="tipo_documento">Tipo de documento</label>
-              <select name="tipo_documento" id="tipo_documento">
-                <option value="">Todos</option>
-                <option value="Registro Civil"        <?php echo $filtro_tipo_doc === 'Registro Civil'        ? 'selected' : ''; ?>>Registro Civil</option>
-                <option value="Tarjeta de Identidad"  <?php echo $filtro_tipo_doc === 'Tarjeta de Identidad'  ? 'selected' : ''; ?>>Tarjeta de Identidad</option>
-                <option value="Cédula de Ciudadanía"  <?php echo $filtro_tipo_doc === 'Cédula de Ciudadanía'  ? 'selected' : ''; ?>>Cédula de Ciudadanía</option>
-                <option value="Cédula de Extranjería" <?php echo $filtro_tipo_doc === 'Cédula de Extranjería' ? 'selected' : ''; ?>>Cédula de Extranjería</option>
-                <option value="NIT"                   <?php echo $filtro_tipo_doc === 'NIT'                   ? 'selected' : ''; ?>>NIT</option>
-              </select>
-            </div>
           </div>
+
+          <!-- Filtros dinámicos -->
+          <?php if (!empty($filtros_config)): ?>
+            <div class="form-row form-row-filtros-dinamicos">
+              <?php foreach ($filtros_config as $filtro): ?>
+                <?php
+                  $fid     = (int)$filtro['id'];
+                  $col     = $filtro['nombre_campo'];
+                  $etiqueta= $filtro['etiqueta'];
+                  $tipo    = $filtro['tipo_control'] ?? 'select';
+                  $name    = 'f' . $fid;
+                  $valor   = $valores_filtros[$fid] ?? '';
+                ?>
+
+                <div class="form-group">
+                  <label for="<?php echo htmlspecialchars($name); ?>">
+                    <?php echo htmlspecialchars($etiqueta); ?>
+                  </label>
+
+                  <?php if ($tipo === 'texto'): ?>
+                    <input
+                      type="text"
+                      id="<?php echo htmlspecialchars($name); ?>"
+                      name="<?php echo htmlspecialchars($name); ?>"
+                      value="<?php echo htmlspecialchars($valor); ?>"
+                    >
+                  <?php else: ?>
+                    <?php
+                      $opciones = obtenerOpcionesFiltro($pdo, $col);
+                    ?>
+                    <select
+                      id="<?php echo htmlspecialchars($name); ?>"
+                      name="<?php echo htmlspecialchars($name); ?>"
+                    >
+                      <option value="">Todos</option>
+                      <?php foreach ($opciones as $op): ?>
+                        <option
+                          value="<?php echo htmlspecialchars($op); ?>"
+                          <?php echo ($valor === $op) ? 'selected' : ''; ?>
+                        >
+                          <?php echo htmlspecialchars($op); ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+
           <button type="submit" class="btn-primary">Aplicar filtros</button>
         </form>
       </section>
@@ -194,8 +365,9 @@ $registros = $stmt_lista->fetchAll();
                       </svg>
                     </a>
 
-                    <!-- Eliminar (sin confirm nativo, se usa modal) -->
-                    <form method="post" action="" class="inline-form form-eliminar">
+                    <!-- Eliminar -->
+                    <form method="post" action="" class="inline-form"
+                          onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
                       <input type="hidden" name="accion" value="eliminar">
                       <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
                       <button type="submit" class="icon-button icon-button-danger" title="Eliminar">
@@ -209,8 +381,9 @@ $registros = $stmt_lista->fetchAll();
                       </button>
                     </form>
 
-                    <!-- Exportar (redirige a exportar.php) -->
-                    <a href="exportar.php" class="icon-button" title="Ir a Exportar PDF">
+                    <!-- PDF -->
+                    <a href="exportar.php" class="icon-button"
+                       title="Ir a exportar PDF">
                       <svg viewBox="0 0 24 24" class="icon-svg">
                         <path d="M12 3v12" fill="none"></path>
                         <polyline points="8 11 12 15 16 11" fill="none"></polyline>
@@ -246,74 +419,6 @@ $registros = $stmt_lista->fetchAll();
       </section>
     </main>
   </div>
-
-  <!-- Modal de confirmación de eliminación -->
-  <div class="modal-overlay" id="modal-eliminar">
-    <div class="modal-box">
-      <button type="button" class="modal-close" data-modal-eliminar-cerrar>&times;</button>
-      <h3 class="modal-title">Eliminar registro</h3>
-      <p class="modal-text">
-        ¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.
-      </p>
-      <div class="modal-buttons">
-        <button type="button" class="btn-muted" data-modal-eliminar-cancelar>Cancelar</button>
-        <button type="button" class="btn-primary" data-modal-eliminar-confirmar>Eliminar</button>
-      </div>
-    </div>
-  </div>
-
   <?php include __DIR__ . '/../includes/footer.php'; ?>
-
-  <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const overlay = document.getElementById('modal-eliminar');
-    const btnCerrar = document.querySelector('[data-modal-eliminar-cerrar]');
-    const btnCancelar = document.querySelector('[data-modal-eliminar-cancelar]');
-    const btnConfirmar = document.querySelector('[data-modal-eliminar-confirmar]');
-    const formsEliminar = document.querySelectorAll('.form-eliminar');
-    let formPendiente = null;
-
-    function abrirModal(form) {
-      formPendiente = form;
-      overlay.classList.add('is-open');
-    }
-
-    function cerrarModal() {
-      overlay.classList.remove('is-open');
-      formPendiente = null;
-    }
-
-    formsEliminar.forEach(function (f) {
-      f.addEventListener('submit', function (e) {
-        e.preventDefault();
-        abrirModal(f);
-      });
-    });
-
-    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModal);
-    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModal);
-
-    if (btnConfirmar) {
-      btnConfirmar.addEventListener('click', function () {
-        if (formPendiente) {
-          formPendiente.submit();
-        }
-        cerrarModal();
-      });
-    }
-
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) {
-        cerrarModal();
-      }
-    });
-
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
-        cerrarModal();
-      }
-    });
-  });
-  </script>
 </body>
 </html>

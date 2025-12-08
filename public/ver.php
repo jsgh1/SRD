@@ -30,24 +30,46 @@ function v($valor) {
 function ruta_publica_upload(?string $ruta): ?string {
     if (!$ruta) return null;
 
+    // Si ya es URL absoluta, la dejamos
     if (preg_match('~^https?://~i', $ruta) || strpos($ruta, '//') === 0) {
         return $ruta;
     }
 
+    // Si ya comienza con ../ (por ejemplo ../uploads/...)
     if (strpos($ruta, '../') === 0) {
         return $ruta;
     }
 
+    // Si viene como /uploads/..., anteponer ..
     if (strpos($ruta, '/uploads/') === 0) {
         return '..' . $ruta;
     }
 
+    // Si viene como uploads/..., anteponer ../
     if (strpos($ruta, 'uploads/') === 0) {
         return '../' . $ruta;
     }
 
+    // Cualquier otra cosa se devuelve tal cual
     return $ruta;
 }
+
+// --- Campos extra configurados y valores de esta persona ---
+$stmtCampos = $pdo->query("
+    SELECT *
+    FROM campos_extra_registro
+    WHERE activo = 1
+    ORDER BY grupo, orden, id
+");
+$campos_extra = $stmtCampos->fetchAll(PDO::FETCH_ASSOC);
+
+$stmtExtra = $pdo->prepare("
+    SELECT campo_id, valor
+    FROM personas_campos_extra
+    WHERE persona_id = ?
+");
+$stmtExtra->execute([$id]);
+$extras_valores = $stmtExtra->fetchAll(PDO::FETCH_KEY_PAIR);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -113,6 +135,20 @@ function ruta_publica_upload(?string $ruta): ?string {
             <p><strong>Zona:</strong> <?php echo v($persona['zona']); ?></p>
             <p><strong>Género:</strong> <?php echo v($persona['genero']); ?></p>
             <p><strong>Fecha de nacimiento:</strong> <?php echo v($persona['fecha_nacimiento']); ?></p>
+
+            <!-- Campos extra grupo "persona" -->
+            <?php foreach ($campos_extra as $campo): ?>
+              <?php if ($campo['grupo'] === 'persona'): ?>
+                <?php
+                  $cid = $campo['id'];
+                  $valorExtra = $extras_valores[$cid] ?? null;
+                ?>
+                <p>
+                  <strong><?php echo htmlspecialchars($campo['nombre_label']); ?>:</strong>
+                  <?php echo v($valorExtra); ?>
+                </p>
+              <?php endif; ?>
+            <?php endforeach; ?>
           </div>
 
           <div class="detalle-col">
@@ -121,6 +157,34 @@ function ruta_publica_upload(?string $ruta): ?string {
             <p><strong>Correo electrónico:</strong> <?php echo v($persona['correo_electronico']); ?></p>
             <p><strong>Cargo:</strong> <?php echo v($persona['cargo']); ?></p>
             <p><strong>Nombre del predio:</strong> <?php echo v($persona['nombre_predio']); ?></p>
+
+            <!-- Campos extra grupo "contacto" -->
+            <?php foreach ($campos_extra as $campo): ?>
+              <?php if ($campo['grupo'] === 'contacto'): ?>
+                <?php
+                  $cid = $campo['id'];
+                  $valorExtra = $extras_valores[$cid] ?? null;
+                ?>
+                <p>
+                  <strong><?php echo htmlspecialchars($campo['nombre_label']); ?>:</strong>
+                  <?php echo v($valorExtra); ?>
+                </p>
+              <?php endif; ?>
+            <?php endforeach; ?>
+
+            <!-- Campos extra grupo "predio" -->
+            <?php foreach ($campos_extra as $campo): ?>
+              <?php if ($campo['grupo'] === 'predio'): ?>
+                <?php
+                  $cid = $campo['id'];
+                  $valorExtra = $extras_valores[$cid] ?? null;
+                ?>
+                <p>
+                  <strong><?php echo htmlspecialchars($campo['nombre_label']); ?>:</strong>
+                  <?php echo v($valorExtra); ?>
+                </p>
+              <?php endif; ?>
+            <?php endforeach; ?>
           </div>
         </div>
 
@@ -139,6 +203,7 @@ function ruta_publica_upload(?string $ruta): ?string {
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_persona'])); ?>"
                 alt="Foto persona"
                 class="detalle-img-clickable"
+                data-full="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_persona'])); ?>"
               >
             </div>
           <?php endif; ?>
@@ -150,6 +215,7 @@ function ruta_publica_upload(?string $ruta): ?string {
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_documento'])); ?>"
                 alt="Foto documento"
                 class="detalle-img-clickable"
+                data-full="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_documento'])); ?>"
               >
             </div>
           <?php endif; ?>
@@ -161,6 +227,7 @@ function ruta_publica_upload(?string $ruta): ?string {
                 src="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_predio'])); ?>"
                 alt="Foto predio"
                 class="detalle-img-clickable"
+                data-full="<?php echo htmlspecialchars(ruta_publica_upload($persona['foto_predio'])); ?>"
               >
             </div>
           <?php endif; ?>
@@ -192,6 +259,7 @@ function ruta_publica_upload(?string $ruta): ?string {
             <span>Editar</span>
           </a>
 
+          <!-- Ahora solo redirige a exportar.php -->
           <a
             href="exportar.php"
             class="btn-outline btn-icon btn-export-pdf"
@@ -203,51 +271,55 @@ function ruta_publica_upload(?string $ruta): ?string {
                 <line x1="12" y1="13" x2="12" y2="7"></line>
               </svg>
             </span>
-            <span>Exportar PDF</span>
+            <span>Ir a exportar PDF</span>
           </a>
         </div>
       </section>
-
-      <!-- Modal de imagen ampliada -->
-      <div class="modal-overlay" id="modal-imagen">
-        <div class="modal-image-box">
-          <button type="button" class="modal-close" data-modal-imagen-cerrar>&times;</button>
-          <img src="" alt="Imagen ampliada" id="modal-imagen-src">
-        </div>
-      </div>
     </main>
   </div>
+
+  <!-- Modal genérico para imágenes de detalle -->
+  <div id="modalImagen" class="modal-overlay">
+    <div class="modal-image-box">
+      <button type="button" class="modal-close" id="modalImagenCerrar">&times;</button>
+      <img src="" alt="Imagen ampliada" id="modalImagenImg">
+    </div>
+  </div>
+
   <?php include __DIR__ . '/../includes/footer.php'; ?>
 
   <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const overlay = document.getElementById('modal-imagen');
-    const imgModal = document.getElementById('modal-imagen-src');
-    const imgs = document.querySelectorAll('.detalle-img-clickable');
-    const btnCerrar = document.querySelector('[data-modal-imagen-cerrar]');
+    const overlay = document.getElementById('modalImagen');
+    const modalImg = document.getElementById('modalImagenImg');
+    const btnCerrar = document.getElementById('modalImagenCerrar');
 
-    if (!overlay || !imgModal || !btnCerrar || imgs.length === 0) return;
+    if (!overlay || !modalImg || !btnCerrar) return;
 
-    imgs.forEach(function (img) {
+    // Abrir modal al hacer clic en cualquier imagen clicable
+    document.querySelectorAll('.detalle-img-clickable').forEach(function (img) {
       img.addEventListener('click', function () {
-        imgModal.src = img.src;
+        const src = this.getAttribute('data-full') || this.getAttribute('src');
+        modalImg.src = src;
         overlay.classList.add('is-open');
       });
     });
 
     function cerrarModal() {
       overlay.classList.remove('is-open');
-      imgModal.src = '';
+      modalImg.src = '';
     }
 
     btnCerrar.addEventListener('click', cerrarModal);
 
+    // Cerrar si se hace clic en el fondo oscuro
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) {
         cerrarModal();
       }
     });
 
+    // Cerrar con ESC
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
         cerrarModal();

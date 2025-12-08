@@ -26,36 +26,40 @@ function vpdf($valor) {
     return $valor !== null && $valor !== '' ? htmlspecialchars($valor) : '—';
 }
 
-// Resolver rutas de imágenes (si existen) a ruta ABSOLUTA del servidor
-function rutaImagenAbsoluta(?string $relativa): ?string {
+// Resolver rutas de imágenes (si existen)
+function rutaImagenAbsoluta($relativa) {
     if (!$relativa) return null;
-
-    $baseDir = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
-    $ruta = null;
-
-    // Caso típico: en BD se guarda algo como "/uploads/xxx/archivo.jpg"
-    if (strpos($relativa, '/uploads/') === 0) {
-        $ruta = $baseDir . $relativa; // /var/www + /uploads/...
-    }
-    // Por compatibilidad: "../uploads/..."
-    elseif (strpos($relativa, '../uploads/') === 0) {
-        $ruta = realpath(__DIR__ . '/' . $relativa);
-    }
-    // Otra cosa: intentamos tal cual
-    else {
-        $ruta = realpath($relativa);
-    }
-
+    // En BD se guarda algo como "/uploads/xxx/archivo.jpg"
+    $ruta = realpath(__DIR__ . '/..' . $relativa);
     if ($ruta && file_exists($ruta)) {
         return $ruta;
     }
-
     return null;
 }
 
 $rutaFotoPersona   = rutaImagenAbsoluta($persona['foto_persona']   ?? null);
 $rutaFotoDocumento = rutaImagenAbsoluta($persona['foto_documento'] ?? null);
 $rutaFotoPredio    = rutaImagenAbsoluta($persona['foto_predio']    ?? null);
+
+// === Campos extra dinámicos ===
+
+// Cargar definición de campos extra activos
+$stmtCampos = $pdo->query("
+    SELECT *
+    FROM campos_extra_registro
+    WHERE activo = 1
+    ORDER BY grupo, orden, id
+");
+$campos_extra = $stmtCampos->fetchAll(PDO::FETCH_ASSOC);
+
+// Cargar valores de esta persona para esos campos
+$stmtExtra = $pdo->prepare("
+    SELECT campo_id, valor
+    FROM personas_campos_extra
+    WHERE persona_id = ?
+");
+$stmtExtra->execute([$id]);
+$extras_valores = $stmtExtra->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // Nombre de archivo PDF
 $nombreBase = trim($persona['nombre_pdf'] ?? '');
@@ -68,7 +72,24 @@ $filename = $nombreBase . '.pdf';
 
 // Construir HTML
 $nombreCompleto = trim(($persona['nombres'] ?? '') . ' ' . ($persona['apellidos'] ?? ''));
-$docCompleto = trim(($persona['tipo_documento'] ?? '') . ' ' . ($persona['numero_documento'] ?? ''));
+$docCompleto    = trim(($persona['tipo_documento'] ?? '') . ' ' . ($persona['numero_documento'] ?? ''));
+
+// Helpers internos para construir filas dinámicas
+function filas_campos_extra_pdf(array $campos_extra, array $extras_valores, string $grupo) {
+    $html = '';
+    foreach ($campos_extra as $campo) {
+        if ($campo['grupo'] !== $grupo) {
+            continue;
+        }
+        $cid        = $campo['id'];
+        $valorExtra = $extras_valores[$cid] ?? null;
+        $html      .= '<tr>'
+                    . '<td class="label">' . vpdf($campo['nombre_label']) . '</td>'
+                    . '<td class="valor">' . vpdf($valorExtra) . '</td>'
+                    . '</tr>';
+    }
+    return $html;
+}
 
 $html = '
 <html>
@@ -218,6 +239,12 @@ $html = '
           <td class="label">Fecha de nacimiento</td>
           <td class="valor">' . vpdf($persona['fecha_nacimiento']) . '</td>
         </tr>
+        ';
+
+// Campos extra grupo "persona"
+$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'persona');
+
+$html .= '
       </table>
     </div>
 
@@ -240,6 +267,15 @@ $html = '
           <td class="label">Nombre del predio</td>
           <td class="valor">' . vpdf($persona['nombre_predio']) . '</td>
         </tr>
+        ';
+
+// Campos extra grupo "contacto"
+$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'contacto');
+
+// Campos extra grupo "predio"
+$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'predio');
+
+$html .= '
       </table>
     </div>
 
@@ -248,46 +284,46 @@ $html = '
       <p class="nota"><strong>Observaciones:</strong><br>' . nl2br(vpdf($persona['nota_admin'])) . '</p>
     </div>';
 
-    // Sección de fotos si hay al menos una
-    if ($rutaFotoPersona || $rutaFotoDocumento || $rutaFotoPredio) {
+// Sección de fotos si hay al menos una
+if ($rutaFotoPersona || $rutaFotoDocumento || $rutaFotoPredio) {
+    $html .= '
+    <div class="seccion">
+      <p class="seccion-titulo">Imágenes asociadas</p>
+      <table class="fotos-grid">
+        <tr>';
+    if ($rutaFotoPersona) {
         $html .= '
-        <div class="seccion">
-          <p class="seccion-titulo">Imágenes asociadas</p>
-          <table class="fotos-grid">
-            <tr>';
-        if ($rutaFotoPersona) {
-            $html .= '
-              <td>
-                <p>Foto persona</p>
-                <img src="file://' . $rutaFotoPersona . '" alt="Foto persona">
-              </td>';
-        } else {
-            $html .= '<td></td>';
-        }
-        if ($rutaFotoDocumento) {
-            $html .= '
-              <td>
-                <p>Foto documento</p>
-                <img src="file://' . $rutaFotoDocumento . '" alt="Foto documento">
-              </td>';
-        } else {
-            $html .= '<td></td>';
-        }
-        if ($rutaFotoPredio) {
-            $html .= '
-              <td>
-                <p>Foto predio</p>
-                <img src="file://' . $rutaFotoPredio . '" alt="Foto predio">
-              </td>';
-        } else {
-            $html .= '<td></td>';
-        }
-
-        $html .= '
-            </tr>
-          </table>
-        </div>';
+          <td>
+            <p>Foto persona</p>
+            <img src="file://' . $rutaFotoPersona . '" alt="Foto persona">
+          </td>';
+    } else {
+        $html .= '<td></td>';
     }
+    if ($rutaFotoDocumento) {
+        $html .= '
+          <td>
+            <p>Foto documento</p>
+            <img src="file://' . $rutaFotoDocumento . '" alt="Foto documento">
+          </td>';
+    } else {
+        $html .= '<td></td>';
+    }
+    if ($rutaFotoPredio) {
+        $html .= '
+          <td>
+            <p>Foto predio</p>
+            <img src="file://' . $rutaFotoPredio . '" alt="Foto predio">
+          </td>';
+    } else {
+        $html .= '<td></td>';
+    }
+
+    $html .= '
+        </tr>
+      </table>
+    </div>';
+}
 
 $html .= '
   </div>
