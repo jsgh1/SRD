@@ -6,8 +6,17 @@ require_once __DIR__ . '/../config/db.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
-// Aceptamos tanto ?search= como ?q= (buscador del header)
-$search = trim($_GET['search'] ?? ($_GET['q'] ?? ''));
+/**
+ * Resolver texto de búsqueda desde GET/POST y nombres search / q
+ * (si uno viene vacío y el otro no, usamos el que tenga texto).
+ */
+$raw_search = '';
+if (isset($_REQUEST['search']) && trim($_REQUEST['search']) !== '') {
+    $raw_search = $_REQUEST['search'];
+} elseif (isset($_REQUEST['q']) && trim($_REQUEST['q']) !== '') {
+    $raw_search = $_REQUEST['q'];
+}
+$search = trim($raw_search);
 
 $por_pagina = 20;
 $pagina     = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
@@ -262,6 +271,7 @@ $registros = $stmt_lista->fetchAll(PDO::FETCH_ASSOC);
                 id="search"
                 name="search"
                 value="<?php echo htmlspecialchars($search); ?>"
+                placeholder="Ej: Juan, Pérez o número de documento"
               >
             </div>
           </div>
@@ -365,9 +375,9 @@ $registros = $stmt_lista->fetchAll(PDO::FETCH_ASSOC);
                       </svg>
                     </a>
 
-                    <!-- Eliminar -->
-                    <form method="post" action="" class="inline-form"
-                          onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
+                    <!-- Eliminar (con modal bonito) -->
+                    <form method="post" action="" class="inline-form form-confirm"
+                          data-confirm="¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.">
                       <input type="hidden" name="accion" value="eliminar">
                       <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
                       <button type="submit" class="icon-button icon-button-danger" title="Eliminar">
@@ -419,6 +429,69 @@ $registros = $stmt_lista->fetchAll(PDO::FETCH_ASSOC);
       </section>
     </main>
   </div>
+
+  <!-- Modal de confirmación para eliminar registros -->
+  <div class="modal-overlay" id="modalConfirmLista">
+    <div class="modal-box">
+      <h2>Confirmar eliminación</h2>
+      <p id="modalConfirmListaMensaje">¿Seguro que deseas eliminar este registro?</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-muted" id="modalConfirmListaCancelar">Cancelar</button>
+        <button type="button" class="btn-primary" id="modalConfirmListaAceptar">Sí, eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var modal = document.getElementById('modalConfirmLista');
+      var msgEl = document.getElementById('modalConfirmListaMensaje');
+      var btnCancelar = document.getElementById('modalConfirmListaCancelar');
+      var btnAceptar = document.getElementById('modalConfirmListaAceptar');
+      var formPendiente = null;
+
+      function abrirModal(form, mensaje) {
+        formPendiente = form;
+        msgEl.textContent = mensaje || '¿Seguro que deseas eliminar este registro?';
+        modal.classList.add('is-open');
+      }
+
+      function cerrarModal() {
+        modal.classList.remove('is-open');
+        formPendiente = null;
+      }
+
+      document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          if (form.getAttribute('data-confirm-ok') === '1') {
+            return;
+          }
+          e.preventDefault();
+          var mensaje = form.getAttribute('data-confirm') || '¿Seguro que deseas eliminar este registro?';
+          abrirModal(form, mensaje);
+        });
+      });
+
+      btnCancelar.addEventListener('click', function () {
+        cerrarModal();
+      });
+
+      btnAceptar.addEventListener('click', function () {
+        if (formPendiente) {
+          formPendiente.setAttribute('data-confirm-ok', '1');
+          formPendiente.submit();
+        }
+        cerrarModal();
+      });
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          cerrarModal();
+        }
+      });
+    });
+  </script>
+
   <?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>

@@ -1715,6 +1715,13 @@ body.tema-oscuro .config-opciones-tabla .icon-button {
   color: #ffffff;
 }
 
+.exportar-nombre-form .icon-button {
+  color: #111827;
+}
+body.tema-oscuro .exportar-nombre-form .icon-button {
+  color: #ffffff;
+}
+
 /* =========================================================
    configuracion.php - CONFIGURACIÓN SISTEMA
    ========================================================= */

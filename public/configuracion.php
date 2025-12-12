@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/mailer.php'; // <-- USAMOS PHPMailer PARA LOS CÓDIGOS
 
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
@@ -209,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 3. Solicitar cambio de email (enviar código al nuevo correo)
+    // 3. Solicitar cambio de email (enviar código al nuevo correo con PHPMailer)
     if ($accion === 'solicitar_cambio_email') {
         $nuevo_email  = trim($_POST['nuevo_email'] ?? '');
         $email_actual = $admin['email'] ?? '';
@@ -239,21 +240,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['cambio_email_nuevo'] = $nuevo_email;
 
-            $asunto = 'Código de verificación para cambio de correo';
-            $mensajeCorreo = "Hola,\n\nHas solicitado cambiar el correo de acceso al Sistema de Registro.\n\n".
-                             "Tu código de verificación es: {$codigo}\n\n".
-                             "Este código es válido por algunos minutos.\n\n".
-                             "Si no solicitaste este cambio, ignora este mensaje.";
-            $cabeceras = "From: no-reply@sistema-registro.local\r\n";
-
-            $enviado = @mail($nuevo_email, $asunto, $mensajeCorreo, $cabeceras);
+            // Usamos PHPMailer en lugar de mail()
+            $enviado = enviarCodigoCambioEmail($nuevo_email, $codigo);
 
             if ($enviado) {
                 $mensaje = 'Hemos generado un código de verificación y lo enviamos al nuevo correo. Ingrésalo abajo para confirmar el cambio.';
             } else {
                 // Entorno local / sin SMTP: mostramos el código para pruebas
                 $_SESSION['debug_codigo_cambio_email'] = $codigo;
-                $mensaje = 'Se generó el código de verificación. Parece que el servidor de correo no está configurado, por lo que mostraremos el código abajo solo para pruebas en local.';
+                $mensaje = 'Se generó el código de verificación pero no se pudo enviar el correo. '
+                         . 'Como estás en entorno de pruebas, mostraremos el código abajo solo para uso local.';
             }
         }
     }
@@ -928,7 +924,14 @@ if (!empty($campos_extra_registro)) {
                             <?php endif; ?>
                           </button>
                         </form>
-                        <form method="post" action="" class="inline-form" style="display:inline-block;" onsubmit="return confirm('¿Eliminar este campo extra? Esta acción no borrará las personas, solo el campo y sus valores.');">
+                        <!-- ELIMINAR CAMPO EXTRA CON MODAL BONITO -->
+                        <form
+                          method="post"
+                          action=""
+                          class="inline-form form-confirm"
+                          style="display:inline-block;"
+                          data-confirm="¿Eliminar este campo extra? Esta acción no borrará las personas, solo el campo y sus valores asociados. Esta acción NO se puede deshacer."
+                        >
                           <input type="hidden" name="accion" value="eliminar_campo_extra">
                           <input type="hidden" name="id_campo" value="<?php echo $c['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar campo">
@@ -1057,7 +1060,14 @@ if (!empty($campos_extra_registro)) {
                             <?php endif; ?>
                           </button>
                         </form>
-                        <form method="post" action="" class="inline-form" style="display:inline-block;" onsubmit="return confirm('¿Eliminar este filtro?');">
+                        <!-- ELIMINAR FILTRO CON MODAL BONITO -->
+                        <form
+                          method="post"
+                          action=""
+                          class="inline-form form-confirm"
+                          style="display:inline-block;"
+                          data-confirm="¿Eliminar este filtro de la lista de registros? Esta acción NO se puede deshacer."
+                        >
                           <input type="hidden" name="accion" value="eliminar_filtro_lista">
                           <input type="hidden" name="id_filtro" value="<?php echo $f['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar filtro">
@@ -1127,6 +1137,70 @@ if (!empty($campos_extra_registro)) {
       </section>
     </main>
   </div>
+
+  <!-- MODAL BONITO PARA CONFIRMAR ELIMINACIÓN (CAMPOS Y FILTROS) -->
+  <div class="modal-overlay" id="modalConfirmConfig">
+    <div class="modal-box">
+      <h2>Confirmar eliminación</h2>
+      <p id="modalConfirmConfigMensaje">¿Seguro que deseas eliminar este elemento?</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-muted" id="modalConfirmConfigCancelar">Cancelar</button>
+        <button type="button" class="btn-primary" id="modalConfirmConfigAceptar">Sí, eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Reutilizamos el mismo patrón de lista.php para mostrar un modal bonito
+    document.addEventListener('DOMContentLoaded', function () {
+      var modal = document.getElementById('modalConfirmConfig');
+      var msgEl = document.getElementById('modalConfirmConfigMensaje');
+      var btnCancelar = document.getElementById('modalConfirmConfigCancelar');
+      var btnAceptar = document.getElementById('modalConfirmConfigAceptar');
+      var formPendiente = null;
+
+      function abrirModal(form, mensaje) {
+        formPendiente = form;
+        msgEl.textContent = mensaje || '¿Seguro que deseas eliminar este elemento?';
+        modal.classList.add('is-open');
+      }
+
+      function cerrarModal() {
+        modal.classList.remove('is-open');
+        formPendiente = null;
+      }
+
+      document.querySelectorAll('form.form-confirm[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          if (form.getAttribute('data-confirm-ok') === '1') {
+            return;
+          }
+          e.preventDefault();
+          var mensaje = form.getAttribute('data-confirm') || '¿Seguro que deseas eliminar este elemento?';
+          abrirModal(form, mensaje);
+        });
+      });
+
+      btnCancelar.addEventListener('click', function () {
+        cerrarModal();
+      });
+
+      btnAceptar.addEventListener('click', function () {
+        if (formPendiente) {
+          formPendiente.setAttribute('data-confirm-ok', '1');
+          formPendiente.submit();
+        }
+        cerrarModal();
+      });
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          cerrarModal();
+        }
+      });
+    });
+  </script>
+
   <?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>

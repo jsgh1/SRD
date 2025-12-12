@@ -36,8 +36,16 @@ $campos_exportar = obtenerCamposExportar($pdo);
    Filtros para la tabla
    ============================ */
 
-// Buscador general
-$search = trim($_GET['search'] ?? '');
+/**
+ * Resolver texto de búsqueda desde GET/POST y nombres search / q
+ */
+$raw_search = '';
+if (isset($_REQUEST['search']) && trim($_REQUEST['search']) !== '') {
+    $raw_search = $_REQUEST['search'];
+} elseif (isset($_REQUEST['q']) && trim($_REQUEST['q']) !== '') {
+    $raw_search = $_REQUEST['q'];
+}
+$search = trim($raw_search);
 
 // Filtro por estado de registro
 $filtro_estado = trim($_GET['estado'] ?? '');
@@ -77,6 +85,9 @@ if (
         $stmtUpd->execute([$nombre_pdf !== '' ? $nombre_pdf : null, $id]);
         $mensaje = 'Nombre de PDF actualizado.';
     }
+
+    // No hacemos redirect para no perder filtros/estado,
+    // simplemente seguimos y recargamos la tabla con los mismos GET.
 }
 
 /* ============================
@@ -139,8 +150,8 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <label for="estado">Estado del registro</label>
               <select name="estado" id="estado">
                 <option value="">Todos</option>
-                <option value="Pendiente"   <?php echo $filtro_estado === 'Pendiente'   ? 'selected' : ''; ?>>Pendiente</option>
-                <option value="Completado"  <?php echo $filtro_estado === 'Completado'  ? 'selected' : ''; ?>>Completado</option>
+                <option value="Pendiente"  <?php echo $filtro_estado === 'Pendiente'  ? 'selected' : ''; ?>>Pendiente</option>
+                <option value="Completado" <?php echo $filtro_estado === 'Completado' ? 'selected' : ''; ?>>Completado</option>
               </select>
             </div>
           </div>
@@ -163,6 +174,7 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
                       <th><?php echo htmlspecialchars($campo['etiqueta']); ?></th>
                     <?php endforeach; ?>
                   <?php endif; ?>
+                  <th>Estado registro</th>
                   <th>Fecha registro</th>
                   <th>Nombre del PDF</th>
                   <th>Acciones</th>
@@ -190,6 +202,16 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <td><?php echo v_exportar($valor); ?></td>
                       <?php endforeach; ?>
                     <?php endif; ?>
+
+                    <td>
+                      <?php
+                        $estado = $fila['estado_registro'] ?? '';
+                        $clase_estado = ($estado === 'Completado') ? 'completado' : 'pendiente';
+                      ?>
+                      <span class="chip-estado chip-<?php echo $clase_estado; ?>">
+                        <?php echo v_exportar($estado); ?>
+                      </span>
+                    </td>
 
                     <td><?php echo v_exportar($fila['fecha_registro'] ?? null); ?></td>
 
