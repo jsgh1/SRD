@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Dompdf\Dompdf;
+use Dompdf\Options;
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) {
@@ -14,36 +15,103 @@ if ($id <= 0) {
 
 $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = ?");
 $stmt->execute([$id]);
-$persona = $stmt->fetch();
+$persona = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$persona) {
     header('Location: exportar.php');
     exit;
 }
 
-// Función segura para valores
+/* =========================
+   Helpers
+   ========================= */
 function vpdf($valor) {
-    return $valor !== null && $valor !== '' ? htmlspecialchars($valor) : '—';
+    if ($valor === null) return '—';
+    $valor = (string)$valor;
+    return trim($valor) !== '' ? htmlspecialchars($valor, ENT_QUOTES, 'UTF-8') : '—';
 }
 
-// Resolver rutas de imágenes (si existen)
-function rutaImagenAbsoluta($relativa) {
+function rutaAbsolutaDesdeBD($relativa) {
     if (!$relativa) return null;
-    // En BD se guarda algo como "/uploads/xxx/archivo.jpg"
-    $ruta = realpath(__DIR__ . '/..' . $relativa);
-    if ($ruta && file_exists($ruta)) {
-        return $ruta;
+
+    $relativa = trim((string)$relativa);
+    if ($relativa === '') return null;
+
+    $candidatos = [
+        __DIR__ . '/..' . $relativa,                 // si viene "/uploads/..."
+        __DIR__ . '/../' . ltrim($relativa, '/'),    // si viene "uploads/..." o "/uploads/..."
+        __DIR__ . '/' . $relativa,                   // por si ya está relativo a este archivo
+        __DIR__ . '/..' . '/' . ltrim($relativa, '/')
+    ];
+
+    foreach ($candidatos as $cand) {
+        $rp = realpath($cand);
+        if ($rp && file_exists($rp)) {
+            return $rp;
+        }
     }
     return null;
 }
 
-$rutaFotoPersona   = rutaImagenAbsoluta($persona['foto_persona']   ?? null);
-$rutaFotoDocumento = rutaImagenAbsoluta($persona['foto_documento'] ?? null);
-$rutaFotoPredio    = rutaImagenAbsoluta($persona['foto_predio']    ?? null);
+function dataUriDesdeRuta($absPath) {
+    if (!$absPath || !file_exists($absPath)) return null;
 
-// === Campos extra dinámicos ===
+    $mime = null;
+    if (function_exists('mime_content_type')) {
+        $mime = @mime_content_type($absPath);
+    }
+    if (!$mime) {
+        $ext = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
+        $map = [
+            'jpg' => 'image/jpeg',
+            'jpeg'=> 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp'=> 'image/webp',
+            'svg' => 'image/svg+xml'
+        ];
+        $mime = $map[$ext] ?? 'application/octet-stream';
+    }
 
-// Cargar definición de campos extra activos
+    $contenido = @file_get_contents($absPath);
+    if ($contenido === false) return null;
+
+    $b64 = base64_encode($contenido);
+    return "data:$mime;base64,$b64";
+}
+
+/* =========================
+   Logo / Nombre sistema
+   ========================= */
+$nombreSistema = 'Sistema de Registro';
+$logoDataUri = null;
+
+try {
+    $stmtCfg = $pdo->query("SELECT * FROM config_sistema ORDER BY id ASC LIMIT 1");
+    $cfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+    if ($cfg) {
+        if (!empty($cfg['nombre_sistema'])) {
+            $nombreSistema = (string)$cfg['nombre_sistema'];
+        }
+        if (!empty($cfg['logo_sistema'])) {
+            $logoAbs = rutaAbsolutaDesdeBD($cfg['logo_sistema']);
+            $logoDataUri = dataUriDesdeRuta($logoAbs);
+        }
+    }
+} catch (Exception $e) {
+    // si falla, dejamos por defecto
+}
+
+/* =========================
+   Fotos de persona
+   ========================= */
+$fotoPersonaUri   = dataUriDesdeRuta(rutaAbsolutaDesdeBD($persona['foto_persona']   ?? null));
+$fotoDocumentoUri = dataUriDesdeRuta(rutaAbsolutaDesdeBD($persona['foto_documento'] ?? null));
+$fotoPredioUri    = dataUriDesdeRuta(rutaAbsolutaDesdeBD($persona['foto_predio']    ?? null));
+
+/* =========================
+   Campos extra dinámicos
+   ========================= */
 $stmtCampos = $pdo->query("
     SELECT *
     FROM campos_extra_registro
@@ -52,7 +120,6 @@ $stmtCampos = $pdo->query("
 ");
 $campos_extra = $stmtCampos->fetchAll(PDO::FETCH_ASSOC);
 
-// Cargar valores de esta persona para esos campos
 $stmtExtra = $pdo->prepare("
     SELECT campo_id, valor
     FROM personas_campos_extra
@@ -61,279 +128,385 @@ $stmtExtra = $pdo->prepare("
 $stmtExtra->execute([$id]);
 $extras_valores = $stmtExtra->fetchAll(PDO::FETCH_KEY_PAIR);
 
-// Nombre de archivo PDF
-$nombreBase = trim($persona['nombre_pdf'] ?? '');
-if ($nombreBase === '') {
-    $nombreBase = 'Ficha_' . ($persona['numero_documento'] ?: 'registro_' . $persona['id']);
-}
-// Limpieza básica para nombre de archivo
-$nombreBase = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreBase);
-$filename = $nombreBase . '.pdf';
-
-// Construir HTML
-$nombreCompleto = trim(($persona['nombres'] ?? '') . ' ' . ($persona['apellidos'] ?? ''));
-$docCompleto    = trim(($persona['tipo_documento'] ?? '') . ' ' . ($persona['numero_documento'] ?? ''));
-
-// Helpers internos para construir filas dinámicas
 function filas_campos_extra_pdf(array $campos_extra, array $extras_valores, string $grupo) {
     $html = '';
     foreach ($campos_extra as $campo) {
-        if ($campo['grupo'] !== $grupo) {
-            continue;
-        }
-        $cid        = $campo['id'];
+        if (($campo['grupo'] ?? '') !== $grupo) continue;
+        $cid = (int)($campo['id'] ?? 0);
         $valorExtra = $extras_valores[$cid] ?? null;
-        $html      .= '<tr>'
-                    . '<td class="label">' . vpdf($campo['nombre_label']) . '</td>'
-                    . '<td class="valor">' . vpdf($valorExtra) . '</td>'
-                    . '</tr>';
+
+        $html .= '<tr>'
+               .   '<td class="cell label">'. vpdf($campo['nombre_label'] ?? '') .'</td>'
+               .   '<td class="cell value">'. vpdf($valorExtra) .'</td>'
+               . '</tr>';
     }
     return $html;
 }
 
+/* =========================
+   Nombre PDF
+   ========================= */
+$nombreBase = trim($persona['nombre_pdf'] ?? '');
+if ($nombreBase === '') {
+    $ndoc = trim((string)($persona['numero_documento'] ?? ''));
+    $nombreBase = 'Ficha_' . ($ndoc !== '' ? $ndoc : ('registro_' . ($persona['id'] ?? $id)));
+}
+$nombreBase = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreBase);
+$filename = $nombreBase . '.pdf';
+
+/* =========================
+   Datos principales
+   ========================= */
+$nombreCompleto = trim(($persona['nombres'] ?? '') . ' ' . ($persona['apellidos'] ?? ''));
+$docCompleto    = trim(($persona['tipo_documento'] ?? '') . ' ' . ($persona['numero_documento'] ?? ''));
+
+$estado = (string)($persona['estado_registro'] ?? '');
+$estadoClase = ($estado === 'Completado') ? 'chip-ok' : 'chip-warn';
+
+/* =========================
+   HTML
+   ========================= */
+$notaAdmin = (string)($persona['nota_admin'] ?? '');
+
 $html = '
-<html>
+<!doctype html>
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <style>
+    @page { margin: 22px 26px; }
     body {
       font-family: DejaVu Sans, sans-serif;
       font-size: 11px;
       color: #111827;
-    }
-    .ficha-container {
-      padding: 10px 14px;
-    }
-    .ficha-header {
-      display: table;
-      width: 100%;
-      margin-bottom: 10px;
-    }
-    .ficha-header-left {
-      display: table-cell;
-      vertical-align: middle;
-      width: 70%;
-    }
-    .ficha-header-right {
-      display: table-cell;
-      vertical-align: middle;
-      width: 30%;
-      text-align: right;
-    }
-    .ficha-titulo {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 0 0 4px;
-    }
-    .ficha-subtitulo {
-      font-size: 11px;
-      margin: 0 0 2px;
-    }
-    .ficha-subtexto {
-      font-size: 10px;
-      color: #4b5563;
       margin: 0;
+      padding: 0;
     }
-    .chip-estado {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 8px;
-      font-size: 9px;
+
+    .page-wrap { width: 100%; }
+
+    .card {
       border: 1px solid #e5e7eb;
-      background: #f9fafb;
+      border-radius: 10px;
+      padding: 14px 14px;
+      margin-bottom: 12px;
     }
-    .chip-completado {
-      background: #dcfce7;
-      border-color: #bbf7d0;
-    }
-    .chip-pendiente {
-      background: #fef9c3;
-      border-color: #fef08a;
-    }
-    .seccion {
-      margin-bottom: 8px;
-    }
-    .seccion-titulo {
-      font-size: 12px;
-      font-weight: bold;
-      border-bottom: 1px solid #e5e7eb;
-      margin: 0 0 4px;
-      padding-bottom: 2px;
-    }
-    .datos-grid {
+
+    .topbar {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 2px;
     }
-    .datos-grid td {
-      padding: 2px 4px;
+    .topbar td {
       vertical-align: top;
     }
-    .label {
-      font-weight: bold;
-      width: 34%;
+
+    .brand {
+      width: 50px;
+      vertical-align: middle;
+    }
+    .brand .logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+      text-align: center;
+      line-height: 38px;
+    }
+    .brand .logo img {
+      width: 38px;
+      height: 38px;
+    }
+    .brand .logo-fallback {
       font-size: 10px;
+      color: #6b7280;
     }
-    .valor {
-      width: 66%;
+
+    .head-main { padding-left: 10px; }
+    .sysname {
       font-size: 10px;
+      color: #6b7280;
+      margin: 0 0 4px 0;
     }
-    .nota {
+    .title {
+      font-size: 18px;
+      font-weight: 800;
+      margin: 0 0 4px 0;
+      color: #0f172a;
+    }
+    .subname {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 2px 0;
+      color: #111827;
+    }
+    .subdoc {
       font-size: 10px;
-      margin-top: 4px;
+      color: #6b7280;
+      margin: 0;
     }
-    .nota strong {
-      font-size: 11px;
+
+    /* ✅ AJUSTE del bloque derecho (lo de tu flecha) */
+    .rightinfo{
+      text-align: right;
+      font-size: 10px;
+      color: #6b7280;
+      line-height: 1.45;
+      padding-right: 10px;  /* separa del borde */
+      padding-left: 10px;   /* separa del contenido de la izquierda */
     }
-    .fotos-grid {
+
+    .chip {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid #d1d5db;
+      margin-top: 6px;
+      color: #111827;
+      background: #f9fafb;
+    }
+    .chip-ok {
+      background: #dcfce7;
+      border-color: #86efac;
+    }
+    .chip-warn {
+      background: #fef9c3;
+      border-color: #fde047;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      margin: 0 0 8px 0;
+      color: #111827;
+    }
+
+    .table-data {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 4px;
+      border-top: 1px solid #edf2f7;
     }
-    .fotos-grid td {
-      width: 33%;
+    .table-data tr {
+      border-bottom: 1px solid #edf2f7;
+    }
+    .cell {
+      padding: 8px 8px;
+      vertical-align: top;
+      font-size: 10.5px;
+    }
+    .label {
+      width: 36%;
+      font-weight: 700;
+      color: #111827;
+    }
+    .value {
+      width: 64%;
+      color: #111827;
+    }
+
+    .images-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .images-grid td {
+      width: 33.33%;
+      padding: 6px 6px;
+      vertical-align: top;
+    }
+    .img-title {
+      font-size: 10px;
+      font-weight: 700;
       text-align: center;
-      font-size: 9px;
-      padding: 2px;
+      margin: 0 0 6px 0;
+      color: #111827;
     }
-    .fotos-grid img {
+    .img-box {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      height: 150px;
+      padding: 8px;
+      text-align: center;
+    }
+    .img-box-inner {
+      display: table;
+      width: 100%;
+      height: 130px;
+    }
+    .img-box-inner .cellmid {
+      display: table-cell;
+      vertical-align: middle;
+      text-align: center;
+    }
+    .img-box img {
       max-width: 100%;
-      max-height: 160px;
-      border-radius: 4px;
+      max-height: 130px;
+      border-radius: 10px;
+    }
+    .noimg {
+      font-size: 10px;
+      color: #94a3b8;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 10px;
+      display: inline-block;
+    }
+
+    /* Nota: que rompa bien y si es larga pase a otra página */
+    .nota-texto {
+      font-size: 10.5px;
+      color: #111827;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
   </style>
 </head>
 <body>
-  <div class="ficha-container">
-    <div class="ficha-header">
-      <div class="ficha-header-left">
-        <p class="ficha-titulo">Ficha de registro</p>
-        <p class="ficha-subtitulo">' . vpdf($nombreCompleto) . '</p>
-        <p class="ficha-subtexto">' . vpdf($docCompleto) . '</p>
-      </div>
-      <div class="ficha-header-right">
-        <p class="ficha-subtexto">Fecha de registro: ' . vpdf($persona['fecha_registro']) . '</p>
-        <p class="ficha-subtexto">ID interno: ' . vpdf($persona['id']) . '</p>
-        <p class="chip-estado ' . ( ($persona["estado_registro"] ?? "") === "Completado" ? "chip-completado" : "chip-pendiente") . '">
-          Estado: ' . vpdf($persona['estado_registro']) . '
-        </p>
-      </div>
-    </div>
+  <div class="page-wrap">
 
-    <div class="seccion">
-      <p class="seccion-titulo">Datos personales</p>
-      <table class="datos-grid">
+    <!-- HEADER -->
+    <div class="card">
+      <table class="topbar">
         <tr>
-          <td class="label">Afiliado</td>
-          <td class="valor">' . vpdf($persona['afiliado']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Zona</td>
-          <td class="valor">' . vpdf($persona['zona']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Género</td>
-          <td class="valor">' . vpdf($persona['genero']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Fecha de nacimiento</td>
-          <td class="valor">' . vpdf($persona['fecha_nacimiento']) . '</td>
-        </tr>
-        ';
-
-// Campos extra grupo "persona"
-$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'persona');
-
+          <td class="brand">
+            <div class="logo">';
+              if ($logoDataUri) {
+                  $html .= '<img src="'. $logoDataUri .'" alt="Logo">';
+              } else {
+                  $html .= '<span class="logo-fallback">LOGO</span>';
+              }
 $html .= '
+            </div>
+          </td>
+
+          <td class="head-main">
+            <p class="sysname">'. vpdf($nombreSistema) .'</p>
+            <p class="title">Ficha de registro</p>
+            <p class="subname">'. vpdf($nombreCompleto) .'</p>
+            <p class="subdoc">'. vpdf($docCompleto) .'</p>
+          </td>
+
+          <!-- ✅ más ancho y padding para que no quede pegado -->
+          <td class="rightinfo" style="width:240px;">
+            <div>Fecha de registro: '. vpdf($persona['fecha_registro'] ?? null) .'</div>
+            <div>ID interno: '. vpdf($persona['id'] ?? null) .'</div>
+            <div class="chip '. $estadoClase .'">Estado: '. vpdf($estado) .'</div>
+          </td>
+        </tr>
       </table>
     </div>
 
-    <div class="seccion">
-      <p class="seccion-titulo">Contacto y predio</p>
-      <table class="datos-grid">
-        <tr>
-          <td class="label">Teléfono</td>
-          <td class="valor">' . vpdf($persona['telefono']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Correo electrónico</td>
-          <td class="valor">' . vpdf($persona['correo_electronico']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Cargo</td>
-          <td class="valor">' . vpdf($persona['cargo']) . '</td>
-        </tr>
-        <tr>
-          <td class="label">Nombre del predio</td>
-          <td class="valor">' . vpdf($persona['nombre_predio']) . '</td>
-        </tr>
-        ';
-
-// Campos extra grupo "contacto"
-$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'contacto');
-
-// Campos extra grupo "predio"
-$html .= filas_campos_extra_pdf($campos_extra, $extras_valores, 'predio');
-
-$html .= '
+    <!-- DATOS PERSONALES -->
+    <div class="card">
+      <p class="section-title">Datos personales</p>
+      <table class="table-data">
+        <tr><td class="cell label">Afiliado</td><td class="cell value">'. vpdf($persona['afiliado'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Zona</td><td class="cell value">'. vpdf($persona['zona'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Género</td><td class="cell value">'. vpdf($persona['genero'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Fecha de nacimiento</td><td class="cell value">'. vpdf($persona['fecha_nacimiento'] ?? null) .'</td></tr>
+        '. filas_campos_extra_pdf($campos_extra, $extras_valores, 'persona') .'
       </table>
     </div>
 
-    <div class="seccion">
-      <p class="seccion-titulo">Nota del administrador</p>
-      <p class="nota"><strong>Observaciones:</strong><br>' . nl2br(vpdf($persona['nota_admin'])) . '</p>
-    </div>';
+    <!-- CONTACTO Y PREDIO -->
+    <div class="card">
+      <p class="section-title">Contacto y predio</p>
+      <table class="table-data">
+        <tr><td class="cell label">Teléfono</td><td class="cell value">'. vpdf($persona['telefono'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Correo electrónico</td><td class="cell value">'. vpdf($persona['correo_electronico'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Cargo</td><td class="cell value">'. vpdf($persona['cargo'] ?? null) .'</td></tr>
+        <tr><td class="cell label">Nombre del predio</td><td class="cell value">'. vpdf($persona['nombre_predio'] ?? null) .'</td></tr>
+        '. filas_campos_extra_pdf($campos_extra, $extras_valores, 'contacto') .'
+        '. filas_campos_extra_pdf($campos_extra, $extras_valores, 'predio') .'
+      </table>
+    </div>
 
-// Sección de fotos si hay al menos una
-if ($rutaFotoPersona || $rutaFotoDocumento || $rutaFotoPredio) {
-    $html .= '
-    <div class="seccion">
-      <p class="seccion-titulo">Imágenes asociadas</p>
-      <table class="fotos-grid">
-        <tr>';
-    if ($rutaFotoPersona) {
-        $html .= '
-          <td>
-            <p>Foto persona</p>
-            <img src="file://' . $rutaFotoPersona . '" alt="Foto persona">
-          </td>';
-    } else {
-        $html .= '<td></td>';
-    }
-    if ($rutaFotoDocumento) {
-        $html .= '
-          <td>
-            <p>Foto documento</p>
-            <img src="file://' . $rutaFotoDocumento . '" alt="Foto documento">
-          </td>';
-    } else {
-        $html .= '<td></td>';
-    }
-    if ($rutaFotoPredio) {
-        $html .= '
-          <td>
-            <p>Foto predio</p>
-            <img src="file://' . $rutaFotoPredio . '" alt="Foto predio">
-          </td>';
-    } else {
-        $html .= '<td></td>';
-    }
+    <!-- IMÁGENES (subidas donde estaba la nota) -->
+    <div class="card">
+      <p class="section-title">Imágenes asociadas</p>
 
-    $html .= '
+      <table class="images-grid">
+        <tr>
+
+          <td>
+            <p class="img-title">Foto persona</p>
+            <div class="img-box">
+              <div class="img-box-inner"><div class="cellmid">';
+                if ($fotoPersonaUri) {
+                    $html .= '<img src="'. $fotoPersonaUri .'" alt="Foto persona">';
+                } else {
+                    $html .= '<span class="noimg">Sin imagen</span>';
+                }
+$html .= '
+              </div></div>
+            </div>
+          </td>
+
+          <td>
+            <p class="img-title">Foto documento</p>
+            <div class="img-box">
+              <div class="img-box-inner"><div class="cellmid">';
+                if ($fotoDocumentoUri) {
+                    $html .= '<img src="'. $fotoDocumentoUri .'" alt="Foto documento">';
+                } else {
+                    $html .= '<span class="noimg">Sin imagen</span>';
+                }
+$html .= '
+              </div></div>
+            </div>
+          </td>
+
+          <td>
+            <p class="img-title">Foto predio</p>
+            <div class="img-box">
+              <div class="img-box-inner"><div class="cellmid">';
+                if ($fotoPredioUri) {
+                    $html .= '<img src="'. $fotoPredioUri .'" alt="Foto predio">';
+                } else {
+                    $html .= '<span class="noimg">Sin imagen</span>';
+                }
+$html .= '
+              </div></div>
+            </div>
+          </td>
+
         </tr>
       </table>
-    </div>';
-}
+    </div>
 
-$html .= '
+    <!-- NOTA (abajo de imágenes, y larga rompe a otra página sin salirse) -->
+    <div class="card">
+      <p class="section-title">Nota del administrador</p>
+      <div class="nota-texto">'. ($notaAdmin !== '' ? nl2br(htmlspecialchars($notaAdmin, ENT_QUOTES, 'UTF-8')) : '—') .'</div>
+    </div>
+
   </div>
 </body>
 </html>
 ';
 
-$dompdf = new Dompdf();
-$dompdf->loadHtml($html);
+/* =========================
+   Dompdf render + footer pages
+   ========================= */
+$options = new Options();
+$options->set('isRemoteEnabled', true);
+$options->set('isHtml5ParserEnabled', true);
+$options->set('defaultFont', 'DejaVu Sans');
+
+$dompdf = new Dompdf($options);
+$dompdf->loadHtml($html, 'UTF-8');
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
+
+/* Footer con paginación (sin deprecated get_font) */
+$canvas = $dompdf->getCanvas();
+$fontMetrics = $dompdf->getFontMetrics();
+$font = $fontMetrics->getFont('DejaVu Sans', 'normal');
+$canvas->page_text(440, 820, "Página {PAGE_NUM} / {PAGE_COUNT}", $font, 9, [107, 114, 128]);
+
 $dompdf->stream($filename, ['Attachment' => true]);
 exit;
