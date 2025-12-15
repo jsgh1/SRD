@@ -2061,6 +2061,166 @@ body.tema-oscuro .config-opciones-agregar {
   box-shadow: 0 12px 30px rgba(15,23,42,0.8);
 }
 
+/* =========================
+   EXPORTAR TABLA: checklist bonito
+   ========================= */
+.exportar-tabla-checklist{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.exportar-check-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid rgba(148,163,184,.35);
+  border-radius:10px;
+  cursor:pointer;
+}
+.exportar-check-item input{ transform: translateY(1px); }
+.exportar-check-item span{ font-size:13px; }
+
+/* =========================
+   MODAL: que se vea bien también en tema claro
+   (tu modal ya existe, esto es solo “skin”)
+   ========================= */
+body.tema-claro .modal-box{
+  background:#ffffff;
+  color:#0f172a;
+}
+body.tema-claro .modal-text{ color:#334155; }
+
+/* =========================
+   LOGO: evitar que se vea recortado (cover -> contain)
+   ========================= */
+.logo-icon img{
+  object-fit: contain; /* antes estaba cover y recortaba */
+  background: rgba(255,255,255,.08);
+}
+
+/* ===== Exportar tabla: orden y diseño ===== */
+.exportar-tabla-box .exportar-tabla-toolbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.exportar-tabla-nombre{
+  flex: 1;
+  min-width: 260px;
+  max-width: 520px;
+}
+
+.exportar-nombre-inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.exportar-tabla-help{
+  display:block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+body.tema-oscuro .exportar-tabla-help{ color:#9ca3af; }
+
+.exportar-tabla-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.exportar-tabla-checklist{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.exportar-check-item{
+  background: rgba(148,163,184,.08);
+}
+body.tema-oscuro .exportar-check-item{
+  background: rgba(148,163,184,.06);
+}
+/* Exportar tabla: input + check al lado (más compacto) */
+.exportar-tabla-nombre-form{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.exportar-tabla-nombre-form input[type="text"]{
+  max-width: 420px;   /* antes quedaba a lo ancho completo */
+}
+
+/* Footer: separar mejor del checklist */
+.exportar-checks-footer-tabla{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148,163,184,.25);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+/* =========================
+   Exportar tabla: nombre + check guardar
+   ========================= */
+.exportar-tabla-nombre-row{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top: 6px;
+}
+.exportar-tabla-nombre-row .form-group{
+  margin:0;
+}
+.exportar-tabla-nombre-row input[type="text"]{
+  max-width: 260px; /* un poquito más corto */
+}
+.exportar-tabla-guardar.icon-button{
+  color:#111827; /* claro: negro */
+}
+body.tema-oscuro .exportar-tabla-guardar.icon-button{
+  color:#ffffff; /* oscuro: blanco */
+}
+
+.exportar-tabla-help{
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color:#6b7280;
+}
+body.tema-oscuro .exportar-tabla-help{
+  color:#9ca3af;
+}
+
+/* Footer del checklist (botón separado y ordenado) */
+.exportar-tabla-footer{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid #e5e7eb;
+}
+body.tema-oscuro .exportar-tabla-footer{
+  border-color:#111827;
+}
+
+/* El color del check (icon-button) ya queda:
+   claro: negro / oscuro: blanco
+   porque estás usando .exportar-nombre-form + reglas existentes */
+
 /* =========================================================
    FIN DEL CSS
    ========================================================= */

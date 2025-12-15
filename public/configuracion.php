@@ -2,7 +2,7 @@
 session_start();
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
-require_once __DIR__ . '/../config/mailer.php'; // <-- USAMOS PHPMailer PARA LOS CÓDIGOS
+require_once __DIR__ . '/../config/mailer.php'; // PHPMailer
 
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
@@ -16,7 +16,9 @@ if ($admin_id <= 0) {
 $errores = [];
 $mensaje = '';
 
-// Campos permitidos para filtros dinámicos de la lista (base)
+// ==============================
+// CAMPOS PERMITIDOS (LISTA)
+// ==============================
 $campos_filtros_permitidos_base = [
     'estado_registro'    => 'Estado del registro',
     'tipo_documento'     => 'Tipo de documento',
@@ -31,10 +33,31 @@ $campos_filtros_permitidos_base = [
     'apellidos'          => 'Apellidos',
     'numero_documento'   => 'Número de documento',
 ];
-// Array extendido: luego le añadimos los campos dinámicos
+
+// array extendido (incluye extras al final)
 $campos_filtros_permitidos = $campos_filtros_permitidos_base;
 
-// Cargar datos actuales del admin
+// ==============================
+// CAMPOS PERMITIDOS (EXPORTAR TABLA)
+// ==============================
+$campos_filtros_exportar_permitidos_base = [
+    'estado_registro'    => 'Estado del registro',
+    'afiliado'           => 'Afiliado',
+    'zona'               => 'Zona',
+    'genero'             => 'Género',
+    'cargo'              => 'Cargo',
+    'nombre_predio'      => 'Nombre del predio',
+    'telefono'           => 'Teléfono',
+    'correo_electronico' => 'Correo electrónico',
+    'fecha_nacimiento'   => 'Fecha de nacimiento',
+    'fecha_registro'     => 'Fecha de registro',
+];
+
+$campos_filtros_exportar_permitidos = $campos_filtros_exportar_permitidos_base;
+
+// ==============================
+// Cargar admin
+// ==============================
 $stmtAdmin = $pdo->prepare("SELECT id, nombre, cargo, email, tema, foto_perfil FROM admins WHERE id = ?");
 $stmtAdmin->execute([$admin_id]);
 $admin = $stmtAdmin->fetch();
@@ -44,7 +67,9 @@ if (!$admin) {
     exit;
 }
 
+// ==============================
 // Cargar config sistema
+// ==============================
 try {
     $stmtCfg = $pdo->query("SELECT * FROM config_sistema ORDER BY id ASC LIMIT 1");
     $configSistema = $stmtCfg->fetch();
@@ -56,7 +81,34 @@ $config_id       = $configSistema['id'] ?? null;
 $nombre_sistema  = $configSistema['nombre_sistema'] ?? 'Sistema de Registro';
 $logo_sistema    = $configSistema['logo_sistema'] ?? null;
 
-// Helper subir foto de perfil
+// ==============================
+// Config exportar tabla (logo + h1 h2 h3)
+// ==============================
+$configExportTabla = null;
+$cfg_export_id = null;
+$export_logo  = null;
+$export_h1    = '';
+$export_h2    = '';
+$export_h3    = '';
+
+try {
+    $stmtEx = $pdo->query("SELECT * FROM config_exportar_tabla ORDER BY id ASC LIMIT 1");
+    $configExportTabla = $stmtEx->fetch();
+    if ($configExportTabla) {
+        $cfg_export_id = $configExportTabla['id'] ?? null;
+        $export_logo   = $configExportTabla['logo'] ?? null;
+        $export_h1     = $configExportTabla['h1'] ?? '';
+        $export_h2     = $configExportTabla['h2'] ?? '';
+        $export_h3     = $configExportTabla['h3'] ?? '';
+    }
+} catch (Exception $e) {
+    // Si la tabla no existe aún, no rompemos la página.
+    $configExportTabla = null;
+}
+
+// ==============================
+// Helpers subida imágenes
+// ==============================
 function subirFotoPerfil($campo, $ruta_actual, &$errores) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
         return $ruta_actual;
@@ -96,7 +148,6 @@ function subirFotoPerfil($campo, $ruta_actual, &$errores) {
         return $ruta_actual;
     }
 
-    // Borrar foto anterior si existía
     if ($ruta_actual) {
         $ruta_fisica = realpath(__DIR__ . '/' . $ruta_actual);
         if ($ruta_fisica && file_exists($ruta_fisica)) {
@@ -104,11 +155,9 @@ function subirFotoPerfil($campo, $ruta_actual, &$errores) {
         }
     }
 
-    // Guardar ruta relativa desde public: ../uploads/admins/...
     return '../uploads/admins/' . $nuevo_nombre;
 }
 
-// Helper subir logo del sistema
 function subirLogoSistema($campo, $ruta_actual, &$errores) {
     if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
         return $ruta_actual;
@@ -148,7 +197,6 @@ function subirLogoSistema($campo, $ruta_actual, &$errores) {
         return $ruta_actual;
     }
 
-    // Borrar logo anterior si existía
     if ($ruta_actual) {
         $ruta_fisica = realpath(__DIR__ . '/' . $ruta_actual);
         if ($ruta_fisica && file_exists($ruta_fisica)) {
@@ -156,20 +204,68 @@ function subirLogoSistema($campo, $ruta_actual, &$errores) {
         }
     }
 
-    // Guardar ruta relativa desde public: ../uploads/sistema/...
     return '../uploads/sistema/' . $nuevo_nombre;
 }
 
+function subirLogoExportarTabla($campo, $ruta_actual, &$errores) {
+    if (!isset($_FILES[$campo]) || $_FILES[$campo]['error'] === UPLOAD_ERR_NO_FILE) {
+        return $ruta_actual;
+    }
+
+    $file = $_FILES[$campo];
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        $errores[] = 'Error al subir el logo de la tabla.';
+        return $ruta_actual;
+    }
+
+    $tmp_name = $file['tmp_name'];
+    $nombre   = basename($file['name']);
+    $ext      = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+    $permitidas = ['jpg','jpeg','png','svg'];
+
+    if (!in_array($ext, $permitidas, true)) {
+        $errores[] = 'Formato de imagen no permitido para el logo (JPG, PNG o SVG).';
+        return $ruta_actual;
+    }
+
+    if ($file['size'] > 5 * 1024 * 1024) {
+        $errores[] = 'El logo de la tabla supera los 5MB.';
+        return $ruta_actual;
+    }
+
+    $carpetaFisica = __DIR__ . '/../uploads/exportar_tabla';
+    if (!is_dir($carpetaFisica)) {
+        @mkdir($carpetaFisica, 0777, true);
+    }
+
+    $nuevo_nombre = uniqid('export_tabla_') . '.' . $ext;
+    $destino = $carpetaFisica . '/' . $nuevo_nombre;
+
+    if (!move_uploaded_file($tmp_name, $destino)) {
+        $errores[] = 'No se pudo guardar el logo de la tabla.';
+        return $ruta_actual;
+    }
+
+    if ($ruta_actual) {
+        $ruta_fisica = realpath(__DIR__ . '/' . $ruta_actual);
+        if ($ruta_fisica && file_exists($ruta_fisica)) {
+            @unlink($ruta_fisica);
+        }
+    }
+
+    return '../uploads/exportar_tabla/' . $nuevo_nombre;
+}
+
+// ==============================
 // Procesar POST
+// ==============================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
 
-    // 1. Guardar tema
+    // 1) Guardar tema
     if ($accion === 'guardar_tema') {
         $nuevo_tema = $_POST['tema'] ?? 'claro';
-        if (!in_array($nuevo_tema, ['claro', 'oscuro'], true)) {
-            $nuevo_tema = 'claro';
-        }
+        if (!in_array($nuevo_tema, ['claro', 'oscuro'], true)) $nuevo_tema = 'claro';
 
         $upd = $pdo->prepare("UPDATE admins SET tema = ? WHERE id = ?");
         $upd->execute([$nuevo_tema, $admin_id]);
@@ -180,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mensaje = 'Tema actualizado correctamente.';
     }
 
-    // 2. Guardar perfil (nombre, cargo, foto)
+    // 2) Guardar perfil
     if ($accion === 'guardar_perfil') {
         $nombre = trim($_POST['nombre'] ?? '');
         $cargo  = trim($_POST['cargo'] ?? '');
@@ -210,12 +306,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 3. Solicitar cambio de email (enviar código al nuevo correo con PHPMailer)
+    // 3) Solicitar cambio email
     if ($accion === 'solicitar_cambio_email') {
         $nuevo_email  = trim($_POST['nuevo_email'] ?? '');
         $email_actual = $admin['email'] ?? '';
 
-        // Limpiamos código de debug anterior
         unset($_SESSION['debug_codigo_cambio_email']);
 
         if ($nuevo_email === '') {
@@ -240,31 +335,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['cambio_email_nuevo'] = $nuevo_email;
 
-            // Usamos PHPMailer en lugar de mail()
             $enviado = enviarCodigoCambioEmail($nuevo_email, $codigo);
 
             if ($enviado) {
                 $mensaje = 'Hemos generado un código de verificación y lo enviamos al nuevo correo. Ingrésalo abajo para confirmar el cambio.';
             } else {
-                // Entorno local / sin SMTP: mostramos el código para pruebas
                 $_SESSION['debug_codigo_cambio_email'] = $codigo;
-                $mensaje = 'Se generó el código de verificación pero no se pudo enviar el correo. '
-                         . 'Como estás en entorno de pruebas, mostraremos el código abajo solo para uso local.';
+                $mensaje = 'Se generó el código de verificación pero no se pudo enviar el correo. Como estás en entorno de pruebas, mostraremos el código abajo solo para uso local.';
             }
         }
     }
 
-    // 4. Confirmar cambio de email
+    // 4) Confirmar cambio email
     if ($accion === 'confirmar_cambio_email') {
         $codigo_ingresado = trim($_POST['codigo_verificacion'] ?? '');
         $nuevo_email = $_SESSION['cambio_email_nuevo'] ?? null;
 
-        if ($codigo_ingresado === '') {
-            $errores[] = 'Ingresa el código de verificación.';
-        }
-        if (!$nuevo_email) {
-            $errores[] = 'No hay un cambio de correo pendiente. Vuelve a solicitar el código.';
-        }
+        if ($codigo_ingresado === '') $errores[] = 'Ingresa el código de verificación.';
+        if (!$nuevo_email) $errores[] = 'No hay un cambio de correo pendiente. Vuelve a solicitar el código.';
 
         if (empty($errores)) {
             $stmtCod = $pdo->prepare("
@@ -286,9 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['admin_email'] = $nuevo_email;
                 $admin['email'] = $nuevo_email;
 
-                unset($_SESSION['cambio_email_nuevo']);
-                unset($_SESSION['debug_codigo_cambio_email']);
-
+                unset($_SESSION['cambio_email_nuevo'], $_SESSION['debug_codigo_cambio_email']);
                 $mensaje = 'Correo actualizado correctamente.';
             } else {
                 $errores[] = 'Código inválido o vencido.';
@@ -296,19 +382,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 5. Agregar opción de select
+    // 5) Agregar opción select
     if ($accion === 'agregar_opcion') {
         $grupo = trim($_POST['grupo'] ?? '');
         $valor = trim($_POST['valor'] ?? '');
-
         $grupos_permitidos = ['afiliado','zona','genero','cargo'];
 
-        if (!in_array($grupo, $grupos_permitidos, true)) {
-            $errores[] = 'Grupo inválido.';
-        }
-        if ($valor === '') {
-            $errores[] = 'El valor no puede estar vacío.';
-        }
+        if (!in_array($grupo, $grupos_permitidos, true)) $errores[] = 'Grupo inválido.';
+        if ($valor === '') $errores[] = 'El valor no puede estar vacío.';
 
         if (empty($errores)) {
             $ins = $pdo->prepare("INSERT INTO opciones_select (grupo, valor, activo) VALUES (?, ?, 1)");
@@ -317,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 6. Cambiar estado (activar/desactivar) opción
+    // 6) Cambiar estado opción
     if ($accion === 'cambiar_estado_opcion') {
         $id_opcion    = (int)($_POST['id_opcion'] ?? 0);
         $nuevo_estado = (int)($_POST['nuevo_estado'] ?? 0);
@@ -329,12 +410,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 7. Guardar nombre + logo del sistema
+    // 7) Guardar sistema (nombre + logo)
     if ($accion === 'guardar_sistema') {
         $nombre_sis_form = trim($_POST['nombre_sistema'] ?? '');
-        if ($nombre_sis_form === '') {
-            $errores[] = 'El nombre del sistema no puede estar vacío.';
-        }
+        if ($nombre_sis_form === '') $errores[] = 'El nombre del sistema no puede estar vacío.';
 
         $ruta_logo = $logo_sistema;
         if (empty($errores)) {
@@ -358,7 +437,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 8. Agregar CAMPO EXTRA de registro
+    // 8) Agregar campo extra
     if ($accion === 'agregar_campo_extra') {
         $grupo       = trim($_POST['grupo_campo'] ?? '');
         $nombre_lbl  = trim($_POST['nombre_label'] ?? '');
@@ -369,15 +448,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $grupos_validos = ['persona','contacto','predio'];
         $tipos_validos  = ['texto','numero','fecha','select'];
 
-        if (!in_array($grupo, $grupos_validos, true)) {
-            $errores[] = 'Grupo de campo inválido.';
-        }
-        if ($nombre_lbl === '') {
-            $errores[] = 'La etiqueta del campo es obligatoria.';
-        }
-        if (!in_array($tipo_ctrl, $tipos_validos, true)) {
-            $tipo_ctrl = 'texto';
-        }
+        if (!in_array($grupo, $grupos_validos, true)) $errores[] = 'Grupo de campo inválido.';
+        if ($nombre_lbl === '') $errores[] = 'La etiqueta del campo es obligatoria.';
+        if (!in_array($tipo_ctrl, $tipos_validos, true)) $tipo_ctrl = 'texto';
 
         if (empty($errores)) {
             $ins = $pdo->prepare("
@@ -389,7 +462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 9. Cambiar estado (activar/desactivar) CAMPO EXTRA
+    // 9) Cambiar estado campo extra
     if ($accion === 'cambiar_estado_campo_extra') {
         $id_campo     = (int)($_POST['id_campo'] ?? 0);
         $nuevo_estado = (int)($_POST['nuevo_estado'] ?? 0);
@@ -401,7 +474,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 10. Eliminar CAMPO EXTRA
+    // 10) Eliminar campo extra
     if ($accion === 'eliminar_campo_extra') {
         $id_campo = (int)($_POST['id_campo'] ?? 0);
         if ($id_campo > 0) {
@@ -411,7 +484,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 11. Agregar FILTRO de lista
+    // 11) Agregar filtro lista
     if ($accion === 'agregar_filtro_lista') {
         $nombre_campo = trim($_POST['nombre_campo_filtro'] ?? '');
         $etiqueta     = trim($_POST['etiqueta_filtro'] ?? '');
@@ -421,7 +494,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $is_extra = (strpos($nombre_campo, 'extra_') === 0);
 
         if ($is_extra) {
-            // Validamos que exista ese campo dinámico
             $idExtra = (int)substr($nombre_campo, 6);
             if ($idExtra <= 0) {
                 $errores[] = 'Campo de filtro dinámico inválido.';
@@ -433,18 +505,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } else {
-            // Campos base: validamos contra la lista base
             if (!array_key_exists($nombre_campo, $campos_filtros_permitidos_base)) {
                 $errores[] = 'Campo de filtro inválido.';
             }
         }
 
-        if ($etiqueta === '') {
-            $errores[] = 'La etiqueta del filtro es obligatoria.';
-        }
-        if (!in_array($tipo_ctrl, ['texto','select'], true)) {
-            $tipo_ctrl = 'select';
-        }
+        if ($etiqueta === '') $errores[] = 'La etiqueta del filtro es obligatoria.';
+        if (!in_array($tipo_ctrl, ['texto','select'], true)) $tipo_ctrl = 'select';
 
         if (empty($errores)) {
             $ins = $pdo->prepare("
@@ -456,7 +523,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 12. Cambiar estado FILTRO de lista
+    // 12) Cambiar estado filtro lista
     if ($accion === 'cambiar_estado_filtro') {
         $id_filtro    = (int)($_POST['id_filtro'] ?? 0);
         $nuevo_estado = (int)($_POST['nuevo_estado'] ?? 0);
@@ -468,7 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 13. Eliminar FILTRO de lista
+    // 13) Eliminar filtro lista
     if ($accion === 'eliminar_filtro_lista') {
         $id_filtro = (int)($_POST['id_filtro'] ?? 0);
         if ($id_filtro > 0) {
@@ -477,15 +544,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mensaje = 'Filtro eliminado.';
         }
     }
+
+    // ==============================
+    // 14) Guardar config exportar tabla (logo + h1/h2/h3)
+    // ==============================
+    if ($accion === 'guardar_exportar_tabla_config') {
+        $h1 = trim($_POST['export_h1'] ?? '');
+        $h2 = trim($_POST['export_h2'] ?? '');
+        $h3 = trim($_POST['export_h3'] ?? '');
+
+        // si tabla no existe, avisamos suave
+        try {
+            $logo_actual = $export_logo;
+            $nuevo_logo = subirLogoExportarTabla('export_logo', $logo_actual, $errores);
+
+            if (empty($errores)) {
+                if ($cfg_export_id) {
+                    $upd = $pdo->prepare("UPDATE config_exportar_tabla SET logo = ?, h1 = ?, h2 = ?, h3 = ? WHERE id = ?");
+                    $upd->execute([$nuevo_logo, $h1, $h2, $h3, $cfg_export_id]);
+                } else {
+                    $ins = $pdo->prepare("INSERT INTO config_exportar_tabla (logo, h1, h2, h3) VALUES (?, ?, ?, ?)");
+                    $ins->execute([$nuevo_logo, $h1, $h2, $h3]);
+                    $cfg_export_id = $pdo->lastInsertId();
+                }
+
+                $export_logo = $nuevo_logo;
+                $export_h1 = $h1;
+                $export_h2 = $h2;
+                $export_h3 = $h3;
+
+                $mensaje = 'Configuración de tabla de exportar guardada correctamente.';
+            }
+        } catch (Exception $e) {
+            $errores[] = 'No se pudo guardar la configuración de tabla de exportar (¿tabla config_exportar_tabla existe?).';
+        }
+    }
+
+    // ==============================
+    // 15) Agregar filtro exportar tabla
+    // ==============================
+    if ($accion === 'agregar_filtro_exportar') {
+        $nombre_campo = trim($_POST['nombre_campo_exportar'] ?? '');
+        $etiqueta     = trim($_POST['etiqueta_exportar'] ?? '');
+        $orden        = isset($_POST['orden_exportar']) && $_POST['orden_exportar'] !== '' ? (int)$_POST['orden_exportar'] : 0;
+
+        $is_extra = (strpos($nombre_campo, 'extra_') === 0);
+
+        if ($is_extra) {
+            $idExtra = (int)substr($nombre_campo, 6);
+            if ($idExtra <= 0) {
+                $errores[] = 'Campo dinámico inválido para exportar.';
+            } else {
+                $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM campos_extra_registro WHERE id = ?");
+                $stmtCheck->execute([$idExtra]);
+                if ((int)$stmtCheck->fetchColumn() === 0) {
+                    $errores[] = 'El campo dinámico seleccionado no existe.';
+                }
+            }
+        } else {
+            if (!array_key_exists($nombre_campo, $campos_filtros_exportar_permitidos_base)) {
+                $errores[] = 'Campo inválido para exportar.';
+            }
+        }
+
+        if ($etiqueta === '') $errores[] = 'La etiqueta es obligatoria.';
+
+        if (empty($errores)) {
+            try {
+                $ins = $pdo->prepare("
+                    INSERT INTO campos_filtros_exportar (nombre_campo, etiqueta, activo, orden)
+                    VALUES (?, ?, 1, ?)
+                ");
+                $ins->execute([$nombre_campo, $etiqueta, $orden]);
+                $mensaje = 'Filtro de exportar agregado correctamente.';
+            } catch (Exception $e) {
+                $errores[] = 'No se pudo agregar el filtro de exportar (¿tabla campos_filtros_exportar existe?).';
+            }
+        }
+    }
+
+    // 16) Cambiar estado filtro exportar
+    if ($accion === 'cambiar_estado_filtro_exportar') {
+        $id_filtro    = (int)($_POST['id_filtro'] ?? 0);
+        $nuevo_estado = (int)($_POST['nuevo_estado'] ?? 0);
+
+        if ($id_filtro > 0) {
+            try {
+                $upd = $pdo->prepare("UPDATE campos_filtros_exportar SET activo = ? WHERE id = ?");
+                $upd->execute([$nuevo_estado ? 1 : 0, $id_filtro]);
+                $mensaje = 'Filtro de exportar actualizado.';
+            } catch (Exception $e) {
+                $errores[] = 'No se pudo actualizar el filtro de exportar (¿tabla campos_filtros_exportar existe?).';
+            }
+        }
+    }
+
+    // 17) Eliminar filtro exportar
+    if ($accion === 'eliminar_filtro_exportar') {
+        $id_filtro = (int)($_POST['id_filtro'] ?? 0);
+        if ($id_filtro > 0) {
+            try {
+                $del = $pdo->prepare("DELETE FROM campos_filtros_exportar WHERE id = ?");
+                $del->execute([$id_filtro]);
+                $mensaje = 'Filtro de exportar eliminado.';
+            } catch (Exception $e) {
+                $errores[] = 'No se pudo eliminar el filtro de exportar (¿tabla campos_filtros_exportar existe?).';
+            }
+        }
+    }
 }
 
-// Cargar opciones actuales
+// ==============================
+// Cargar opciones selects
+// ==============================
 function cargarOpcionesPorGrupo($pdo, $grupo) {
     $stmt = $pdo->prepare("SELECT id, valor, activo FROM opciones_select WHERE grupo = ? ORDER BY valor");
     $stmt->execute([$grupo]);
     return $stmt->fetchAll();
 }
-
 $op_afiliado = cargarOpcionesPorGrupo($pdo, 'afiliado');
 $op_zona     = cargarOpcionesPorGrupo($pdo, 'zona');
 $op_genero   = cargarOpcionesPorGrupo($pdo, 'genero');
@@ -494,7 +670,9 @@ $op_cargo    = cargarOpcionesPorGrupo($pdo, 'cargo');
 $cambio_email_pendiente = $_SESSION['cambio_email_nuevo'] ?? null;
 $debug_codigo = $_SESSION['debug_codigo_cambio_email'] ?? null;
 
-// Cargar campos extra de registro
+// ==============================
+// Cargar campos extra y filtros lista
+// ==============================
 function cargarCamposExtraRegistro($pdo) {
     $stmt = $pdo->query("
         SELECT *
@@ -504,7 +682,6 @@ function cargarCamposExtraRegistro($pdo) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Cargar filtros de lista
 function cargarFiltrosListaConfig($pdo) {
     $stmt = $pdo->query("
         SELECT *
@@ -517,12 +694,35 @@ function cargarFiltrosListaConfig($pdo) {
 $campos_extra_registro = cargarCamposExtraRegistro($pdo);
 $filtros_lista         = cargarFiltrosListaConfig($pdo);
 
-// Ampliar campos de filtros permitidos con los campos dinámicos creados
+// Extender permitidos (LISTA) con extras
 if (!empty($campos_extra_registro)) {
     foreach ($campos_extra_registro as $c_extra) {
         $key = 'extra_' . $c_extra['id'];
         $campos_filtros_permitidos[$key] = $c_extra['nombre_label'];
     }
+}
+
+// Extender permitidos (EXPORTAR) con extras
+if (!empty($campos_extra_registro)) {
+    foreach ($campos_extra_registro as $c_extra) {
+        $key = 'extra_' . $c_extra['id'];
+        $campos_filtros_exportar_permitidos[$key] = $c_extra['nombre_label'];
+    }
+}
+
+// ==============================
+// Cargar filtros exportar tabla
+// ==============================
+$filtros_exportar = [];
+try {
+    $stmtFE = $pdo->query("
+        SELECT *
+        FROM campos_filtros_exportar
+        ORDER BY orden, id
+    ");
+    $filtros_exportar = $stmtFE->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $filtros_exportar = [];
 }
 ?>
 <!DOCTYPE html>
@@ -532,7 +732,7 @@ if (!empty($campos_extra_registro)) {
   <title>Configuración - Sistema de Registro</title>
   <link rel="stylesheet" href="../assets/css/styles.css">
 </head>
-<body class="<?php echo $body_class; ?>">
+<body class="<?php echo htmlspecialchars($body_class); ?>">
   <?php include __DIR__ . '/../includes/header.php'; ?>
   <div class="layout-container">
     <?php include __DIR__ . '/../includes/sidebar.php'; ?>
@@ -557,7 +757,7 @@ if (!empty($campos_extra_registro)) {
       <?php endif; ?>
 
       <div class="config-grid">
-        <!-- Configuración del sistema (nombre + logo) -->
+        <!-- Identidad sistema -->
         <section class="form-card config-card">
           <h2>
             <span class="config-icon">
@@ -697,7 +897,7 @@ if (!empty($campos_extra_registro)) {
           </form>
         </section>
 
-        <!-- Cambio de correo -->
+        <!-- Cambio correo -->
         <section class="form-card config-card">
           <h2>
             <span class="config-icon">
@@ -743,13 +943,12 @@ if (!empty($campos_extra_registro)) {
             <p class="config-desc" style="margin-top:8px;">
               <strong>Solo para pruebas en local:</strong> el código generado es
               <code><?php echo htmlspecialchars($debug_codigo); ?></code>.
-              En un servidor real configura el correo para no mostrar este dato.
             </p>
           <?php endif; ?>
         </section>
       </div>
 
-      <!-- Opciones de selects -->
+      <!-- Opciones selects -->
       <section class="form-card config-card config-opciones-card">
         <h2>
           <span class="config-icon">
@@ -857,7 +1056,7 @@ if (!empty($campos_extra_registro)) {
         </div>
       </section>
 
-      <!-- CAMPOS DINÁMICOS DE REGISTRO -->
+      <!-- CAMPOS DINÁMICOS -->
       <section class="form-card config-card">
         <h2>
           <span class="config-icon">
@@ -869,10 +1068,6 @@ if (!empty($campos_extra_registro)) {
           </span>
           Campos dinámicos del registro
         </h2>
-        <p class="config-desc">
-          Define campos adicionales para el formulario de registro y el detalle de las personas.
-          Puedes ubicarlos en las secciones de "Datos de la persona", "Contacto y ubicación" o "Información del predio".
-        </p>
 
         <?php if (empty($campos_extra_registro)): ?>
           <p class="config-opciones-empty">No hay campos extra configurados.</p>
@@ -924,14 +1119,10 @@ if (!empty($campos_extra_registro)) {
                             <?php endif; ?>
                           </button>
                         </form>
-                        <!-- ELIMINAR CAMPO EXTRA CON MODAL BONITO -->
-                        <form
-                          method="post"
-                          action=""
-                          class="inline-form form-confirm"
-                          style="display:inline-block;"
-                          data-confirm="¿Eliminar este campo extra? Esta acción no borrará las personas, solo el campo y sus valores asociados. Esta acción NO se puede deshacer."
-                        >
+
+                        <form method="post" action=""
+                              class="inline-form form-confirm"
+                              data-confirm="¿Eliminar este campo extra? Esta acción NO se puede deshacer.">
                           <input type="hidden" name="accion" value="eliminar_campo_extra">
                           <input type="hidden" name="id_campo" value="<?php echo $c['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar campo">
@@ -994,7 +1185,7 @@ if (!empty($campos_extra_registro)) {
         </div>
       </section>
 
-      <!-- FILTROS DE LA LISTA DE REGISTROS -->
+      <!-- FILTROS LISTA -->
       <section class="form-card config-card">
         <h2>
           <span class="config-icon">
@@ -1004,10 +1195,6 @@ if (!empty($campos_extra_registro)) {
           </span>
           Filtros de la lista de registros
         </h2>
-        <p class="config-desc">
-          Elige qué filtros adicionales aparecerán en la página de lista de registros.
-          Puedes combinarlos con el buscador general por nombre, apellido o documento.
-        </p>
 
         <?php if (empty($filtros_lista)): ?>
           <p class="config-opciones-empty">No hay filtros configurados.</p>
@@ -1060,14 +1247,10 @@ if (!empty($campos_extra_registro)) {
                             <?php endif; ?>
                           </button>
                         </form>
-                        <!-- ELIMINAR FILTRO CON MODAL BONITO -->
-                        <form
-                          method="post"
-                          action=""
-                          class="inline-form form-confirm"
-                          style="display:inline-block;"
-                          data-confirm="¿Eliminar este filtro de la lista de registros? Esta acción NO se puede deshacer."
-                        >
+
+                        <form method="post" action=""
+                              class="inline-form form-confirm"
+                              data-confirm="¿Eliminar este filtro de la lista? Esta acción NO se puede deshacer.">
                           <input type="hidden" name="accion" value="eliminar_filtro_lista">
                           <input type="hidden" name="id_filtro" value="<?php echo $f['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar filtro">
@@ -1116,10 +1299,12 @@ if (!empty($campos_extra_registro)) {
                 <?php endif; ?>
               </select>
             </div>
+
             <div class="form-group">
               <label for="etiqueta_filtro">Etiqueta visible</label>
               <input type="text" name="etiqueta_filtro" id="etiqueta_filtro" placeholder="Ej: Estado, Zona, Afiliado" required>
             </div>
+
             <div class="form-group">
               <label for="tipo_control_filtro">Tipo de control</label>
               <select name="tipo_control_filtro" id="tipo_control_filtro" required>
@@ -1127,31 +1312,217 @@ if (!empty($campos_extra_registro)) {
                 <option value="texto">Texto (búsqueda parcial)</option>
               </select>
             </div>
+
             <div class="form-group">
               <label for="orden_filtro">Orden (opcional)</label>
               <input type="number" name="orden_filtro" id="orden_filtro" placeholder="0">
             </div>
+
             <button type="submit" class="btn-primary btn-small">Agregar filtro</button>
           </form>
+        </div>
+      </section>
+
+      <!-- EXPORTAR TABLA: FILTROS + CONFIG ENCABEZADO -->
+      <section class="form-card config-card">
+        <h2>
+          <span class="config-icon">
+            <svg viewBox="0 0 24 24" class="icon-svg">
+              <rect x="4" y="4" width="16" height="4" rx="1"></rect>
+              <rect x="4" y="10" width="16" height="4" rx="1"></rect>
+              <rect x="4" y="16" width="16" height="4" rx="1"></rect>
+            </svg>
+          </span>
+          Tabla de exportar (filtros + encabezado)
+        </h2>
+        <p class="config-desc">
+          Administra qué columnas/filtros aparecerán en <strong>exportar</strong> para exportar la <strong>tabla</strong>.
+          También puedes configurar el encabezado del PDF (logo y textos H1/H2/H3).
+        </p>
+
+        <!-- Config encabezado tabla -->
+        <div class="form-card" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Encabezado del PDF de tabla</h3>
+
+          <form method="post" action="" enctype="multipart/form-data">
+            <input type="hidden" name="accion" value="guardar_exportar_tabla_config">
+
+            <div class="perfil-admin-grid">
+              <div class="perfil-admin-foto">
+                <div class="perfil-admin-avatar">
+                  <?php if (!empty($export_logo)): ?>
+                    <img src="<?php echo htmlspecialchars($export_logo); ?>" alt="Logo tabla">
+                  <?php else: ?>
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                      <rect x="4" y="6" width="16" height="12" rx="3" fill="none"></rect>
+                      <path d="M7 10h10" fill="none"></path>
+                    </svg>
+                  <?php endif; ?>
+                </div>
+                <div class="form-group">
+                  <label for="export_logo">Logo para tabla</label>
+                  <input type="file" name="export_logo" id="export_logo" accept="image/*">
+                </div>
+              </div>
+
+              <div class="perfil-admin-datos">
+                <div class="form-group">
+                  <label for="export_h1">H1</label>
+                  <input type="text" name="export_h1" id="export_h1" value="<?php echo htmlspecialchars($export_h1); ?>" placeholder="Ej: JUNTA DE ACCION COMUNAL..." required>
+                </div>
+                <div class="form-group">
+                  <label for="export_h2">H2</label>
+                  <input type="text" name="export_h2" id="export_h2" value="<?php echo htmlspecialchars($export_h2); ?>" placeholder="Ej: VEREDA..." required>
+                </div>
+                <div class="form-group">
+                  <label for="export_h3">H3</label>
+                  <input type="text" name="export_h3" id="export_h3" value="<?php echo htmlspecialchars($export_h3); ?>" placeholder="Ej: FORMATO CONTROL DE ASISTENCIA..." required>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary btn-small">Guardar encabezado</button>
+          </form>
+        </div>
+
+        <!-- Filtros exportar -->
+        <div style="margin-top:14px;">
+          <h3 style="margin-top:0;">Filtros/columnas disponibles para la tabla</h3>
+
+          <?php if (empty($filtros_exportar)): ?>
+            <p class="config-opciones-empty">No hay filtros de exportar configurados.</p>
+          <?php else: ?>
+            <div class="config-opciones-grid">
+              <div class="config-opciones-col" style="grid-column: 1 / -1;">
+                <table class="config-opciones-tabla">
+                  <thead>
+                    <tr>
+                      <th>Etiqueta</th>
+                      <th>Campo</th>
+                      <th>Estado</th>
+                      <th>Orden</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($filtros_exportar as $f): ?>
+                      <tr>
+                        <td><?php echo htmlspecialchars($f['etiqueta']); ?></td>
+                        <td><?php
+                          $nc = $f['nombre_campo'];
+                          echo htmlspecialchars($campos_filtros_exportar_permitidos[$nc] ?? $nc);
+                        ?></td>
+                        <td>
+                          <?php if (!empty($f['activo'])): ?>
+                            <span class="badge badge-activo">Activo</span>
+                          <?php else: ?>
+                            <span class="badge badge-inactivo">Inactivo</span>
+                          <?php endif; ?>
+                        </td>
+                        <td><?php echo (int)($f['orden'] ?? 0); ?></td>
+                        <td class="config-opciones-acciones">
+                          <form method="post" action="" class="inline-form" style="display:inline-block;">
+                            <input type="hidden" name="accion" value="cambiar_estado_filtro_exportar">
+                            <input type="hidden" name="id_filtro" value="<?php echo (int)$f['id']; ?>">
+                            <input type="hidden" name="nuevo_estado" value="<?php echo !empty($f['activo']) ? 0 : 1; ?>">
+                            <button type="submit" class="icon-button" title="<?php echo !empty($f['activo']) ? 'Desactivar' : 'Activar'; ?>">
+                              <?php if (!empty($f['activo'])): ?>
+                                <svg viewBox="0 0 24 24" class="icon-svg">
+                                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  <line x1="6" y1="18" x2="18" y2="6"></line>
+                                </svg>
+                              <?php else: ?>
+                                <svg viewBox="0 0 24 24" class="icon-svg">
+                                  <polyline points="4 13 9 18 20 6" fill="none" stroke-width="2"></polyline>
+                                </svg>
+                              <?php endif; ?>
+                            </button>
+                          </form>
+
+                          <form method="post" action=""
+                                class="inline-form form-confirm"
+                                data-confirm="¿Eliminar este filtro de exportar? Esta acción NO se puede deshacer.">
+                            <input type="hidden" name="accion" value="eliminar_filtro_exportar">
+                            <input type="hidden" name="id_filtro" value="<?php echo (int)$f['id']; ?>">
+                            <button type="submit" class="icon-button icon-button-danger" title="Eliminar filtro">
+                              <svg viewBox="0 0 24 24" class="icon-svg">
+                                <polyline points="3 6 5 6 21 6" fill="none"></polyline>
+                                <path d="M8 6V4h8v2" fill="none"></path>
+                                <path d="M19 6l-1 14H6L5 6" fill="none"></path>
+                                <line x1="10" y1="10" x2="10" y2="17"></line>
+                                <line x1="14" y1="10" x2="14" y2="17"></line>
+                              </svg>
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <div class="config-opciones-agregar">
+            <h3>Agregar filtro/columna para exportar</h3>
+            <form method="post" action="" class="config-opciones-form">
+              <input type="hidden" name="accion" value="agregar_filtro_exportar">
+
+              <div class="form-group">
+                <label for="nombre_campo_exportar">Campo</label>
+                <select name="nombre_campo_exportar" id="nombre_campo_exportar" required>
+                  <option value="">Seleccione...</option>
+                  <optgroup label="Campos principales">
+                    <?php foreach ($campos_filtros_exportar_permitidos_base as $campo => $labelCampo): ?>
+                      <option value="<?php echo htmlspecialchars($campo); ?>">
+                        <?php echo htmlspecialchars($labelCampo . ' (' . $campo . ')'); ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </optgroup>
+                  <?php if (!empty($campos_extra_registro)): ?>
+                    <optgroup label="Campos dinámicos">
+                      <?php foreach ($campos_extra_registro as $c_extra): ?>
+                        <?php $valorOpt = 'extra_' . $c_extra['id']; ?>
+                        <option value="<?php echo htmlspecialchars($valorOpt); ?>">
+                          <?php echo htmlspecialchars($c_extra['nombre_label']); ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </optgroup>
+                  <?php endif; ?>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="etiqueta_exportar">Etiqueta visible</label>
+                <input type="text" name="etiqueta_exportar" id="etiqueta_exportar" placeholder="Ej: Dirección, Comisión, etc" required>
+              </div>
+
+              <div class="form-group">
+                <label for="orden_exportar">Orden (opcional)</label>
+                <input type="number" name="orden_exportar" id="orden_exportar" placeholder="0">
+              </div>
+
+              <button type="submit" class="btn-primary btn-small">Agregar filtro</button>
+            </form>
+          </div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- MODAL BONITO PARA CONFIRMAR ELIMINACIÓN (CAMPOS Y FILTROS) -->
+  <!-- Modal de confirmación (bonito) -->
   <div class="modal-overlay" id="modalConfirmConfig">
     <div class="modal-box">
-      <h2>Confirmar eliminación</h2>
-      <p id="modalConfirmConfigMensaje">¿Seguro que deseas eliminar este elemento?</p>
+      <h2>Confirmar acción</h2>
+      <p id="modalConfirmConfigMensaje">¿Seguro que deseas continuar?</p>
       <div class="modal-actions">
         <button type="button" class="btn-muted" id="modalConfirmConfigCancelar">Cancelar</button>
-        <button type="button" class="btn-primary" id="modalConfirmConfigAceptar">Sí, eliminar</button>
+        <button type="button" class="btn-primary" id="modalConfirmConfigAceptar">Sí, continuar</button>
       </div>
     </div>
   </div>
 
   <script>
-    // Reutilizamos el mismo patrón de lista.php para mostrar un modal bonito
     document.addEventListener('DOMContentLoaded', function () {
       var modal = document.getElementById('modalConfirmConfig');
       var msgEl = document.getElementById('modalConfirmConfigMensaje');
@@ -1161,7 +1532,7 @@ if (!empty($campos_extra_registro)) {
 
       function abrirModal(form, mensaje) {
         formPendiente = form;
-        msgEl.textContent = mensaje || '¿Seguro que deseas eliminar este elemento?';
+        msgEl.textContent = mensaje || '¿Seguro que deseas continuar?';
         modal.classList.add('is-open');
       }
 
@@ -1170,20 +1541,15 @@ if (!empty($campos_extra_registro)) {
         formPendiente = null;
       }
 
-      document.querySelectorAll('form.form-confirm[data-confirm]').forEach(function (form) {
+      document.querySelectorAll('form[data-confirm]').forEach(function (form) {
         form.addEventListener('submit', function (e) {
-          if (form.getAttribute('data-confirm-ok') === '1') {
-            return;
-          }
+          if (form.getAttribute('data-confirm-ok') === '1') return;
           e.preventDefault();
-          var mensaje = form.getAttribute('data-confirm') || '¿Seguro que deseas eliminar este elemento?';
-          abrirModal(form, mensaje);
+          abrirModal(form, form.getAttribute('data-confirm') || '¿Seguro que deseas continuar?');
         });
       });
 
-      btnCancelar.addEventListener('click', function () {
-        cerrarModal();
-      });
+      btnCancelar.addEventListener('click', cerrarModal);
 
       btnAceptar.addEventListener('click', function () {
         if (formPendiente) {
@@ -1194,9 +1560,7 @@ if (!empty($campos_extra_registro)) {
       });
 
       modal.addEventListener('click', function (e) {
-        if (e.target === modal) {
-          cerrarModal();
-        }
+        if (e.target === modal) cerrarModal();
       });
     });
   </script>
