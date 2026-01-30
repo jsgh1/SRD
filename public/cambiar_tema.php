@@ -1,6 +1,6 @@
 <?php
 // public/cambiar_tema.php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../config/db.php';
 
 if (empty($_SESSION['admin_id'])) {

@@ -1,7 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/mailer.php'; // PHPMailer
 
 $tema = $_SESSION['tema'] ?? 'claro';
@@ -260,7 +261,12 @@ function subirLogoExportarTabla($campo, $ruta_actual, &$errores) {
 // Procesar POST
 // ==============================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $accion = $_POST['accion'] ?? '';
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$accion = $_POST['accion'] ?? '';
 
     // 1) Guardar tema
     if ($accion === 'guardar_tema') {
@@ -773,6 +779,8 @@ try {
           </p>
 
           <form method="post" action="" enctype="multipart/form-data">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="guardar_sistema">
 
             <div class="perfil-admin-grid">
@@ -828,6 +836,8 @@ try {
           <p class="config-desc">Elige si quieres ver el sistema en modo claro u oscuro.</p>
 
           <form method="post" action="">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="guardar_tema">
             <div class="config-tema-options">
               <label class="config-radio">
@@ -857,6 +867,8 @@ try {
           <p class="config-desc">Actualiza tu nombre, cargo y foto de perfil.</p>
 
           <form method="post" action="" enctype="multipart/form-data">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="guardar_perfil">
 
             <div class="perfil-admin-grid">
@@ -914,6 +926,8 @@ try {
           </p>
 
           <form method="post" action="" class="config-email-form">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="solicitar_cambio_email">
             <div class="form-group">
               <label for="nuevo_email">Nuevo correo electrónico</label>
@@ -929,6 +943,8 @@ try {
                 <strong><?php echo htmlspecialchars($cambio_email_pendiente); ?></strong>
               </p>
               <form method="post" action="">
+          <?php echo csrf_field(); ?>
+
                 <input type="hidden" name="accion" value="confirmar_cambio_email">
                 <div class="form-group">
                   <label for="codigo_verificacion">Código de verificación</label>
@@ -1007,6 +1023,8 @@ try {
                         </td>
                         <td class="config-opciones-acciones">
                           <form method="post" action="" class="inline-form">
+          <?php echo csrf_field(); ?>
+
                             <input type="hidden" name="accion" value="cambiar_estado_opcion">
                             <input type="hidden" name="id_opcion" value="<?php echo $op['id']; ?>">
                             <input type="hidden" name="nuevo_estado" value="<?php echo $op['activo'] ? 0 : 1; ?>">
@@ -1036,6 +1054,8 @@ try {
         <div class="config-opciones-agregar">
           <h3>Agregar nueva opción</h3>
           <form method="post" action="" class="config-opciones-form">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="agregar_opcion">
             <div class="form-group">
               <label for="grupo">Grupo</label>
@@ -1103,6 +1123,8 @@ try {
                       <td><?php echo (int)$c['orden']; ?></td>
                       <td class="config-opciones-acciones">
                         <form method="post" action="" class="inline-form" style="display:inline-block;">
+          <?php echo csrf_field(); ?>
+
                           <input type="hidden" name="accion" value="cambiar_estado_campo_extra">
                           <input type="hidden" name="id_campo" value="<?php echo $c['id']; ?>">
                           <input type="hidden" name="nuevo_estado" value="<?php echo $c['activo'] ? 0 : 1; ?>">
@@ -1123,6 +1145,8 @@ try {
                         <form method="post" action=""
                               class="inline-form form-confirm"
                               data-confirm="¿Eliminar este campo extra? Esta acción NO se puede deshacer.">
+          <?php echo csrf_field(); ?>
+
                           <input type="hidden" name="accion" value="eliminar_campo_extra">
                           <input type="hidden" name="id_campo" value="<?php echo $c['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar campo">
@@ -1147,6 +1171,8 @@ try {
         <div class="config-opciones-agregar">
           <h3>Agregar nuevo campo</h3>
           <form method="post" action="" class="config-opciones-form">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="agregar_campo_extra">
             <div class="form-group">
               <label for="grupo_campo">Sección (grupo)</label>
@@ -1231,6 +1257,8 @@ try {
                       <td><?php echo (int)$f['orden']; ?></td>
                       <td class="config-opciones-acciones">
                         <form method="post" action="" class="inline-form" style="display:inline-block;">
+          <?php echo csrf_field(); ?>
+
                           <input type="hidden" name="accion" value="cambiar_estado_filtro">
                           <input type="hidden" name="id_filtro" value="<?php echo $f['id']; ?>">
                           <input type="hidden" name="nuevo_estado" value="<?php echo $f['activo'] ? 0 : 1; ?>">
@@ -1251,6 +1279,8 @@ try {
                         <form method="post" action=""
                               class="inline-form form-confirm"
                               data-confirm="¿Eliminar este filtro de la lista? Esta acción NO se puede deshacer.">
+          <?php echo csrf_field(); ?>
+
                           <input type="hidden" name="accion" value="eliminar_filtro_lista">
                           <input type="hidden" name="id_filtro" value="<?php echo $f['id']; ?>">
                           <button type="submit" class="icon-button icon-button-danger" title="Eliminar filtro">
@@ -1275,6 +1305,8 @@ try {
         <div class="config-opciones-agregar">
           <h3>Agregar nuevo filtro</h3>
           <form method="post" action="" class="config-opciones-form">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="agregar_filtro_lista">
             <div class="form-group">
               <label for="nombre_campo_filtro">Campo</label>
@@ -1345,6 +1377,8 @@ try {
           <h3 style="margin-top:0;">Encabezado del PDF de tabla</h3>
 
           <form method="post" action="" enctype="multipart/form-data">
+          <?php echo csrf_field(); ?>
+
             <input type="hidden" name="accion" value="guardar_exportar_tabla_config">
 
             <div class="perfil-admin-grid">
@@ -1422,6 +1456,8 @@ try {
                         <td><?php echo (int)($f['orden'] ?? 0); ?></td>
                         <td class="config-opciones-acciones">
                           <form method="post" action="" class="inline-form" style="display:inline-block;">
+          <?php echo csrf_field(); ?>
+
                             <input type="hidden" name="accion" value="cambiar_estado_filtro_exportar">
                             <input type="hidden" name="id_filtro" value="<?php echo (int)$f['id']; ?>">
                             <input type="hidden" name="nuevo_estado" value="<?php echo !empty($f['activo']) ? 0 : 1; ?>">
@@ -1442,6 +1478,8 @@ try {
                           <form method="post" action=""
                                 class="inline-form form-confirm"
                                 data-confirm="¿Eliminar este filtro de exportar? Esta acción NO se puede deshacer.">
+          <?php echo csrf_field(); ?>
+
                             <input type="hidden" name="accion" value="eliminar_filtro_exportar">
                             <input type="hidden" name="id_filtro" value="<?php echo (int)$f['id']; ?>">
                             <button type="submit" class="icon-button icon-button-danger" title="Eliminar filtro">
@@ -1466,6 +1504,8 @@ try {
           <div class="config-opciones-agregar">
             <h3>Agregar filtro/columna para exportar</h3>
             <form method="post" action="" class="config-opciones-form">
+          <?php echo csrf_field(); ?>
+
               <input type="hidden" name="accion" value="agregar_filtro_exportar">
 
               <div class="form-group">

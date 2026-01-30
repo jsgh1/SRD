@@ -1,8 +1,6 @@
 <?php
-// includes/header.php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// header.php
+require_once __DIR__ . '/session.php';
 
 // $pdo debe venir de la página que incluye este header (dashboard, lista, etc.)
 // pero por si acaso:

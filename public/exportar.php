@@ -1,8 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
 
+require_once __DIR__ . '/../includes/csrf.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
@@ -38,7 +39,12 @@ $mensaje = '';
 $errores = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guardar_nombre_pdf') {
-  $id = (int)($_POST['id'] ?? 0);
+  
+  if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+    http_response_code(403);
+    exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+  }
+$id = (int)($_POST['id'] ?? 0);
   $nombre_pdf = trim($_POST['nombre_pdf'] ?? '');
 
   if ($id > 0) {
@@ -314,6 +320,8 @@ $incFooter  = __DIR__ . '/../includes/footer.php';
 
                     <td>
                       <form method="post" action="" class="inline-form exportar-nombre-form">
+          <?php echo csrf_field(); ?>
+
                         <input type="hidden" name="accion" value="guardar_nombre_pdf">
                         <input type="hidden" name="id" value="<?php echo (int)$fila['id']; ?>">
                         <input

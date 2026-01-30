@@ -1,10 +1,6 @@
 <?php
-// includes/footer.php
-
-// Si quieres mostrar el nombre del sistema aquí también:
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// footer.php
+require_once __DIR__ . '/session.php';
 
 $nombreSistemaFooter = 'Sistema de Registro';
 

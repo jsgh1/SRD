@@ -1,14 +1,18 @@
 <?php
-
-session_start();
-
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/mailer.php';
 
 $mensaje_error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
     if ($email === '' || $password === '') {
@@ -124,6 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <form method="post" action="" class="login-form">
+          <?php echo csrf_field(); ?>
+
         <div class="form-group form-group-icon">
           <label for="email">Correo electrónico</label>
           <div class="input-with-icon">

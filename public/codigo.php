@@ -1,8 +1,9 @@
 <?php
 // public/codigo.php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../config/db.php';
 
+require_once __DIR__ . '/../includes/csrf.php';
 if (empty($_SESSION['login_admin_id'])) {
     // Si no viene del login, lo mandamos al inicio
     header('Location: index.php');
@@ -12,7 +13,12 @@ if (empty($_SESSION['login_admin_id'])) {
 $mensaje_error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $codigo = trim($_POST['codigo'] ?? '');
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$codigo = trim($_POST['codigo'] ?? '');
 
     if ($codigo === '') {
         $mensaje_error = 'Ingresa el código que te llegó al correo.';
@@ -33,7 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $update = $pdo->prepare("UPDATE codigos_login SET usado = 1 WHERE id = ?");
             $update->execute([$registro['id']]);
 
-            // Cargar datos del admin (incluye tema, email, foto)
+            
+            // Prevent session fixation after successful 2FA
+            session_regenerate_id(true);
+// Cargar datos del admin (incluye tema, email, foto)
             $stmtAdmin = $pdo->prepare("SELECT nombre, cargo, tema, email, foto_perfil FROM admins WHERE id = ?");
             $stmtAdmin->execute([$admin_id]);
             $adminData = $stmtAdmin->fetch();
@@ -143,6 +152,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <form method="post" action="" class="login-form">
+          <?php echo csrf_field(); ?>
+
         <div class="form-group form-group-icon">
           <label for="codigo">Código de verificación</label>
           <div class="input-with-icon">

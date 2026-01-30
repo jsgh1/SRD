@@ -1,8 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
 
+require_once __DIR__ . '/../includes/csrf.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
@@ -166,7 +167,12 @@ $extras_valores = $stmtExtra->fetchAll(PDO::FETCH_KEY_PAIR);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $tipo_documento   = trim($_POST['tipo_documento'] ?? '');
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$tipo_documento   = trim($_POST['tipo_documento'] ?? '');
     $numero_documento = trim($_POST['numero_documento'] ?? '');
     $nombres          = trim($_POST['nombres'] ?? '');
     $apellidos        = trim($_POST['apellidos'] ?? '');
@@ -334,6 +340,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           action=""
           enctype="multipart/form-data"
         >
+          <?php echo csrf_field(); ?>
+
 
           <!-- Datos de la persona -->
           <div class="form-section">

@@ -1,8 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
 
+require_once __DIR__ . '/../includes/csrf.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
@@ -38,7 +39,12 @@ $campos_extra_consulta = [];
 $valores_campos_extra  = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $tipo_doc = trim($_POST['tipo_documento'] ?? '');
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$tipo_doc = trim($_POST['tipo_documento'] ?? '');
     $numero   = trim($_POST['numero_documento'] ?? '');
 
     if ($tipo_doc === '' || $numero === '') {
@@ -107,6 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <form method="post" action="" class="consulta-form">
+          <?php echo csrf_field(); ?>
+
           <div class="form-row">
             <div class="form-group">
               <label for="tipo_documento">Tipo de documento</label>

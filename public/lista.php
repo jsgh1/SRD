@@ -1,8 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../config/db.php';
 
+require_once __DIR__ . '/../includes/csrf.php';
 $tema = $_SESSION['tema'] ?? 'claro';
 $body_class = 'main-layout tema-' . $tema;
 
@@ -44,7 +45,12 @@ if (
     isset($_POST['accion']) &&
     $_POST['accion'] === 'eliminar'
 ) {
-    $id_eliminar = (int)($_POST['id'] ?? 0);
+    
+    if (!csrf_validate($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        exit('Solicitud inválida (CSRF). Recarga la página e inténtalo de nuevo.');
+    }
+$id_eliminar = (int)($_POST['id'] ?? 0);
 
     if ($id_eliminar > 0) {
         $stmt = $pdo->prepare("SELECT foto_persona, foto_documento, foto_predio FROM personas WHERE id = ?");
@@ -378,6 +384,8 @@ $registros = $stmt_lista->fetchAll(PDO::FETCH_ASSOC);
                     <!-- Eliminar (con modal bonito) -->
                     <form method="post" action="" class="inline-form form-confirm"
                           data-confirm="¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.">
+          <?php echo csrf_field(); ?>
+
                       <input type="hidden" name="accion" value="eliminar">
                       <input type="hidden" name="id" value="<?php echo $fila['id']; ?>">
                       <button type="submit" class="icon-button icon-button-danger" title="Eliminar">
